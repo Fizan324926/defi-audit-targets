@@ -28,6 +28,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | [Reserve Protocol](https://immunefi.com/bug-bounty/reserve/) | $500,000 | Solidity | 0 (clean audit) | [`audits/reserve-protocol/`](audits/reserve-protocol/findings/AUDIT-REPORT.md) | Complete |
 | [Gains Network](https://immunefi.com/bug-bounty/gains-network/) | $200,000 | Solidity | 0 (clean audit) | [`audits/gains-network/`](audits/gains-network/findings/AUDIT-REPORT.md) | Complete |
 | [Kamino Finance](https://immunefi.com/bug-bounty/kamino/) | $100,000 | Rust / Solana | 1 High, 2 Low-Medium, 2 Low | [`audits/kamino/`](audits/kamino/findings/AUDIT-REPORT.md) | Complete |
+| [Chainlink](https://immunefi.com/bug-bounty/chainlink/) | $3,000,000 | Solidity + Rust + Go | 0 (clean audit) | [`audits/chainlink/`](audits/chainlink/findings/AUDIT-REPORT.md) | Complete |
 
 ---
 
@@ -53,7 +54,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | 15 | Kamino | 002 | **HIGH** | Permissionless crank exploits missing multiplier validation to corrupt xStocks prices | [Report](audits/kamino/findings/IMMUNEFI-SUBMISSION-002.md) |
 | 16 | Kamino | 001 | **LOW-MED** | ChainlinkX v10 ignores `tokenized_price` — manual `price * multiplier` may diverge | [Report](audits/kamino/findings/IMMUNEFI-SUBMISSION-001.md) |
 
-**Total: 4 High, 2 Medium-High, 9 Medium, 1 Low-Medium across 11 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network: clean audits — 0 findings)
+**Total: 4 High, 2 Medium-High, 9 Medium, 1 Low-Medium across 12 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network + Chainlink: clean audits — 0 findings)
 
 ---
 
@@ -280,6 +281,32 @@ The protocol demonstrates strong defense-in-depth: global diamond reentrancy gua
 | GNSStaking | Low | `debtToken` advanced on zero-amount harvest (sub-penny precision loss) |
 
 **Full audit report:** [`AUDIT-REPORT.md`](audits/gains-network/findings/AUDIT-REPORT.md)
+
+---
+
+### Chainlink — [`audits/chainlink/`](audits/chainlink/findings/AUDIT-REPORT.md)
+
+Comprehensive security audit of the Chainlink ecosystem across 6 repositories: CCIP cross-chain bridge (EVM + Solana + Go plugins), VRF (V2, V2.5), LLO Feeds (v0.4, v0.5), Automation v2.3, Functions v1.3.0, DataFeedsCache, and CCIP Owner contracts (ManyChainMultiSig, RBACTimelock). ~270K+ LOC across Solidity, Rust, and Go. 100+ hypotheses tested across 15 deep analysis areas.
+
+**Result: Clean audit — 0 exploitable vulnerabilities found across 100+ hypotheses.**
+
+The protocol demonstrates exceptional defense-in-depth: multi-layer verification (OCR3 F+1 consensus + independent RMN f+1 signer set + Merkle proofs with domain separators + balance pre/post checks), atomic execution state machine (2-bit bitmap with IN_PROGRESS reentrancy guard), CallWithExactGas library preventing gas bombs (return data capping + EIP-150 accounting), rate limiting on all token operations, fork protection via cached chain ID in digest construction, and self-serve TokenAdminRegistry with 2-step admin transfer.
+
+**Low/Informational observations only:**
+
+| Area | Severity | Description |
+|------|----------|-------------|
+| VRF V2 Wrapper | Low | `_getFeedData` allows weiPerUnitLink=0 (circuit breakers prevent) |
+| VRF V2 Coordinator | Low | `pendingRequestExists` only checks latest nonce (V2.5 fixes) |
+| FeeQuoter | Low | `onReport` same-timestamp price overwrite (requires trusted forwarder) |
+| CCIPHome | Low | Missing p2pId/signerKey uniqueness validation (admin-gated) |
+| DataFeedsCache | Low | Report type detection via length heuristic (ABI mismatch prevents) |
+| Automation | Low | Paused upkeeps not checked on-chain in transmit (requires DON collusion) |
+| Automation | Low | Report gasLimits not validated against performGas (requires DON collusion) |
+| Automation | Low | `addFunds` missing nonReentrant (standard ERC20s unaffected) |
+
+**Full audit report:** [`AUDIT-REPORT.md`](audits/chainlink/findings/AUDIT-REPORT.md)
+**Architecture notes:** [`architecture.md`](audits/chainlink/notes/architecture.md)
 
 ---
 
