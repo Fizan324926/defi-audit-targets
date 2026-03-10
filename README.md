@@ -25,6 +25,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | [Orca Whirlpool](https://immunefi.com/bug-bounty/orca/) | $500,000 | Rust / Solana | 1 Medium (borderline) | [`audits/orca-whirlpool/`](audits/orca-whirlpool/README.md) | Complete |
 | [Beanstalk](https://immunefi.com/bug-bounty/beanstalk/) | $1,100,000 | Solidity | 1 Medium-High | [`audits/beanstalk/`](audits/beanstalk/findings/AUDIT-REPORT.md) | Complete |
 | [Gearbox V3](https://immunefi.com/bug-bounty/gearbox/) | $200,000 | Solidity | 0 (clean audit) | [`audits/gearbox/`](audits/gearbox/AUDIT-REPORT.md) | Complete |
+| [Reserve Protocol](https://immunefi.com/bug-bounty/reserve/) | $500,000 | Solidity | 0 (clean audit) | [`audits/reserve-protocol/`](audits/reserve-protocol/findings/AUDIT-REPORT.md) | Complete |
 
 ---
 
@@ -47,7 +48,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | 13 | Olympus | 001 | **MEDIUM** | YieldRepo hardcoded `backingPerToken` ($11.33) | [Report](audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-001.md) |
 | 14 | Beanstalk | 001 | **MED-HIGH** | SOP/Flood zero-slippage swap + manipulable spot deltaB | [Report](audits/beanstalk/findings/IMMUNEFI-SUBMISSION-001.md) |
 
-**Total: 3 High, 2 Medium-High, 9 Medium across 8 protocols** (LayerZero + Gearbox V3: clean audits — 0 findings)
+**Total: 3 High, 2 Medium-High, 9 Medium across 9 protocols** (LayerZero + Gearbox V3 + Reserve Protocol: clean audits — 0 findings)
 
 ---
 
@@ -212,6 +213,23 @@ The protocol demonstrates exceptionally mature defense-in-depth: multi-DVN verif
 **Full audit report:** [`AUDIT-REPORT.md`](audits/layerzero/AUDIT-REPORT.md)
 **Sub-reports:** [`DVN/Executor/Worker`](audits/layerzero/findings/AUDIT-REPORT-DVN-EXECUTOR-WORKER-2026-03-02.md) | [`OFT/OApp`](audits/layerzero/findings/AUDIT-REPORT-OFT-OAPP-2026-03-02.md)
 **False positive documentation:** `audits/layerzero/notes/false-positives/` (7 detailed writeups)
+
+### Reserve Protocol — [`audits/reserve-protocol/`](audits/reserve-protocol/findings/AUDIT-REPORT.md)
+
+Two-repo protocol: core RToken system (BackingManager, StRSR, Dutch/Batch auctions, 15+ collateral plugins, governance) + Index DTF/Folio extension (index token, StakingVault, rebalancing auctions, trusted filler/CowSwap integration, fee distribution). 1000+ Solidity files across `protocol/` and `reserve-index-dtf/`.
+
+**Result: Clean audit — 0 exploitable vulnerabilities found across 24+ hypotheses.**
+
+The protocol demonstrates exceptional defense-in-depth: global reentrancy guard (shared `_guardCounter` in Main), conservative fixed-point rounding universally favoring the protocol (CEIL received, FLOOR sent), 5-check Chainlink oracle validation with graceful price decay, flash-loan resistance by design (snapshot voting, delayed balance tracking, `startTime = block.timestamp + 1`), era-based governance invalidation, and Folio's `sync` modifier ensuring consistent NAV.
+
+**Informational observations only:**
+
+| Area | Severity | Description |
+|------|----------|-------------|
+| Folio trusted fill | Informational | Residual token approval after trusted fill closure (defense-in-depth improvement) |
+| FolioLib fees | Informational | First fee period undercharges by up to ~24 hours (non-exploitable) |
+
+**Full audit report:** [`AUDIT-REPORT.md`](audits/reserve-protocol/findings/AUDIT-REPORT.md)
 
 ---
 
