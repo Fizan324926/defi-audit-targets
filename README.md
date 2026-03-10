@@ -27,6 +27,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | [Gearbox V3](https://immunefi.com/bug-bounty/gearbox/) | $200,000 | Solidity | 0 (clean audit) | [`audits/gearbox/`](audits/gearbox/AUDIT-REPORT.md) | Complete |
 | [Reserve Protocol](https://immunefi.com/bug-bounty/reserve/) | $500,000 | Solidity | 0 (clean audit) | [`audits/reserve-protocol/`](audits/reserve-protocol/findings/AUDIT-REPORT.md) | Complete |
 | [Gains Network](https://immunefi.com/bug-bounty/gains-network/) | $200,000 | Solidity | 0 (clean audit) | [`audits/gains-network/`](audits/gains-network/findings/AUDIT-REPORT.md) | Complete |
+| [Kamino Finance](https://immunefi.com/bug-bounty/kamino/) | $100,000 | Rust / Solana | 0 (clean audit) | [`audits/kamino/`](audits/kamino/findings/AUDIT-REPORT.md) | Complete |
 
 ---
 
@@ -49,7 +50,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | 13 | Olympus | 001 | **MEDIUM** | YieldRepo hardcoded `backingPerToken` ($11.33) | [Report](audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-001.md) |
 | 14 | Beanstalk | 001 | **MED-HIGH** | SOP/Flood zero-slippage swap + manipulable spot deltaB | [Report](audits/beanstalk/findings/IMMUNEFI-SUBMISSION-001.md) |
 
-**Total: 3 High, 2 Medium-High, 9 Medium across 10 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network: clean audits — 0 findings)
+**Total: 3 High, 2 Medium-High, 9 Medium across 11 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network + Kamino Finance: clean audits — 0 findings)
 
 ---
 
@@ -214,6 +215,30 @@ The protocol demonstrates exceptionally mature defense-in-depth: multi-DVN verif
 **Full audit report:** [`AUDIT-REPORT.md`](audits/layerzero/AUDIT-REPORT.md)
 **Sub-reports:** [`DVN/Executor/Worker`](audits/layerzero/findings/AUDIT-REPORT-DVN-EXECUTOR-WORKER-2026-03-02.md) | [`OFT/OApp`](audits/layerzero/findings/AUDIT-REPORT-OFT-OAPP-2026-03-02.md)
 **False positive documentation:** `audits/layerzero/notes/false-positives/` (7 detailed writeups)
+
+### Kamino Finance — [`audits/kamino/`](audits/kamino/findings/AUDIT-REPORT.md)
+
+Solana DeFi protocol suite: lending (klend), yield vaults (kvault), oracle aggregation (scope), and farming/staking (kfarms). 4 Anchor programs, ~43,700 LOC Rust. Covers reserves, obligations, elevation groups, flash loans, withdrawal queues, ERC4626-like vaults, 40+ oracle types with TWAP/chain pricing, and delegated farming with warmup/cooldown.
+
+**Result: Clean audit — 0 exploitable vulnerabilities found across 60+ hypotheses.**
+
+The protocol demonstrates exceptional defense-in-depth: post-transfer vault balance invariants, PriceStatusFlags bitfield system requiring ALL_CHECKS for sensitive operations, seed deposits (100K dead shares) against first-depositor inflation, triple CPI protection (program ID + stack height + preceding instruction), liquidation bonus capped by diff-to-bad-debt, internal accounting (not balance-derived) for vault share pricing, WAD-precision reward-per-share tracking with integer-advance tallies, TWAP minimum sample requirements, and per-program admin separation limiting blast radius.
+
+**Low/Informational observations only:**
+
+| Area | Severity | Description |
+|------|----------|-------------|
+| klend interest | Info | Taylor 3rd-order compound approximation underestimates (negligible at per-slot rates) |
+| klend flash loan | Info | Flash loans can use withdraw queue reserved liquidity (atomic, no impact) |
+| kfarms rewards | Low | `reward_user_once` credits without deducting from `rewards_available` (trusted admin op) |
+| kfarms unstake | Low | Pending withdrawal cooldown overwritten on re-unstake |
+| scope CPI | Low | CPI protection does not restrict post-refresh instructions (by design) |
+| scope TWAP | Low | EMA initialized from single sample (mitigated by min-sample validation) |
+
+**Full audit report:** [`AUDIT-REPORT.md`](audits/kamino/findings/AUDIT-REPORT.md)
+**Analysis files:** [`klend`](audits/kamino/notes/klend-analysis.md) | [`kvault/scope/kfarms`](audits/kamino/notes/secondary-analysis.md) | [`Cross-program`](audits/kamino/notes/cross-program-analysis.md)
+
+---
 
 ### Reserve Protocol — [`audits/reserve-protocol/`](audits/reserve-protocol/findings/AUDIT-REPORT.md)
 
