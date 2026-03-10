@@ -9,6 +9,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | Program | Bounty | Language | Audit Folder | Status |
 |---------|--------|----------|--------------|--------|
 | [Orca Whirlpool](https://immunefi.com/bug-bounty/orca/) | $500,000 | Rust / Solana | [`audits/orca-whirlpool/`](audits/orca-whirlpool/README.md) | In Progress |
+| [GMX V2 Synthetics](https://immunefi.com/bug-bounty/gmx/) | $5,000,000 | Solidity / EVM | [`audits/gmx-synthetics/`](audits/gmx-synthetics/README.md) | Complete |
 
 ---
 
@@ -33,6 +34,23 @@ Concentrated liquidity AMM on Solana (Uniswap V3-style). Covers the adaptive fee
 - [M-02 exploit](audits/orca-whirlpool/findings/exploits/M-02-exploit.md)
 
 **Verification scripts:** `audits/orca-whirlpool/scripts/verify/`
+
+---
+
+### GMX V2 Synthetics — [`audits/gmx-synthetics/`](audits/gmx-synthetics/README.md)
+
+Decentralized perpetual exchange on Arbitrum/Avalanche ($700M+ TVL). Covers the Gelato relay system for gasless transactions, LayerZero cross-chain bridging, oracle price validation, and position management.
+
+**Confirmed Findings (2 of 20 initial — 18 eliminated as false positives):**
+
+| ID | Severity | Description |
+|----|----------|-------------|
+| [VULN-003](audits/gmx-synthetics/exploits/VULN-003-relay-fee-swap-zero-slippage.md) | High | `minOutputAmount: 0` hardcoded in relay fee swap — MEV sandwich extraction |
+| [VULN-011](audits/gmx-synthetics/exploits/VULN-011-missing-relay-nonce-validation.md) | High | Random (not sequential) relay nonce — keeper can reorder/skip transactions |
+
+**Verification scripts:** `audits/gmx-synthetics/scripts/`
+
+**False positive analysis:** `audits/gmx-synthetics/exploits/false-positives/` (18 findings with detailed elimination rationale)
 
 ---
 

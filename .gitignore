@@ -3,3 +3,7 @@ __pycache__/
 *.pyo
 .env
 *.log
+
+# Cloned source repos (too large)
+audits/gmx-synthetics/gmx-synthetics/
+audits/gmx-synthetics/gmx-contracts/
