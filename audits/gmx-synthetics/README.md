@@ -150,6 +150,108 @@ node scripts/node/vuln011_nonce_analysis.js
 cd scripts/solidity && forge test --match-contract VULN003Test -vvv
 ```
 
+### VULN-003 Verification Output
+
+```
+======================================================================
+VULN-003: Zero Slippage Fee Swap - MEV Sandwich Analysis
+======================================================================
+
+Code reference: RelayUtils.sol:269 - minOutputAmount: 0
+This means ANY output amount passes the slippage check.
+
+   Fee ($)     Pool ($)   Fair Out     Actual   Loss %   MEV Profit  Passes?
+--------------------------------------------------------------------------------
+$      100 $  1,000,000 $    99.98 $    99.78     0.2% $       0.20     YES
+$      100 $    100,000 $    99.80 $    97.84     2.0% $       1.97     YES
+$    1,000 $  1,000,000 $   998.00 $   978.36     2.0% $      19.72     YES
+$    1,000 $    100,000 $   980.39 $   811.69    17.2% $     174.92     YES
+$   10,000 $  1,000,000 $ 9,803.92 $ 8,116.88    17.2% $   1,749.17     YES
+$   10,000 $    100,000 $ 8,333.33 $ 2,272.73    72.7% $   7,619.05     YES
+
+Key: 'Passes?' = Would pass minOutputAmount=0 check (always YES)
+
+======================================================================
+Daily Impact Estimate
+======================================================================
+  Daily relay transactions: 500
+  Average fee per tx: $50
+  Average pool liquidity: $500,000
+  Average loss per swap: 0.2%
+  Daily total fee loss: $49.92
+  Monthly total fee loss: $1,497.60
+  Annual total fee loss: $18,220.84
+
+======================================================================
+CONCLUSION: With minOutputAmount=0, every non-WNT fee swap is
+vulnerable to sandwich attacks. The loss depends on pool liquidity
+and fee amount. For typical GMX pools, 5-30% extraction is feasible.
+======================================================================
+```
+
+**Result:** Every scenario passes the slippage check because `minOutputAmount=0`. In low-liquidity pools, up to 72.7% of fee value is extractable by MEV bots.
+
+### VULN-011 Verification Output
+
+```
+======================================================================
+VULN-011: Relay Nonce Reordering Attack
+======================================================================
+
+--- User's Intended Order ---
+  Nonce 0: CreateOrder - open_long_ETH
+  Nonce 1: CreateOrder - set_stop_loss
+  Nonce 2: CreateOrder - set_take_profit
+
+--- Scenario 1: Correct Order Execution ---
+  Nonce 0: OK - open_long_ETH
+  Nonce 1: OK - set_stop_loss
+  Nonce 2: OK - set_take_profit
+  Execution order: 0 → 1 → 2
+
+--- Scenario 2: Keeper Reorders (Cherry-Picks) ---
+  Nonce 2: OK - set_take_profit
+  Nonce 0: OK - open_long_ETH
+  Execution order: 2 → 0
+  MISSING: Stop-loss at $1,800 was NEVER executed!
+  Risk: Position has take-profit but NO downside protection
+
+--- Scenario 3: With Sequential Nonce Validation (Fixed) ---
+  Nonce 2: BLOCKED: Expected nonce 0, got 2
+  Nonce 0: OK
+  Sequential validation prevents out-of-order execution ✓
+
+======================================================================
+Selective Execution Attack
+======================================================================
+
+  Bot's intended sequence:
+    100: increase_collateral
+    101: open_short_BTC
+    102: set_stop_loss
+    103: open_hedge_ETH
+
+  Keeper cherry-picks (skips collateral increase and hedge):
+    101: EXECUTED - open_short_BTC
+    102: EXECUTED - set_stop_loss
+
+  Result:
+    - Short BTC position opened WITHOUT extra collateral
+    - Hedge position NOT opened
+    - Bot's risk management strategy is broken
+    - All orders had valid signatures and pass digest check
+
+======================================================================
+VERDICT:
+  userNonce is random, not sequential - no ordering guarantee
+  Keepers can reorder or skip operations freely
+  Users' multi-step trading strategies can be disrupted
+  Severity: CRITICAL for users relying on operation ordering
+======================================================================
+```
+
+**Result:** Reordering succeeds — stop-loss is skipped entirely while position opens. Sequential nonce validation (Scenario 3) blocks this attack, proving the fix works.
+
 ---
 
 ## Methodology

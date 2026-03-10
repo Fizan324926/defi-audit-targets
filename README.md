@@ -48,6 +48,10 @@ Decentralized perpetual exchange on Arbitrum/Avalanche ($700M+ TVL). Covers the 
 | [VULN-003](audits/gmx-synthetics/exploits/VULN-003-relay-fee-swap-zero-slippage.md) | High | `minOutputAmount: 0` hardcoded in relay fee swap — MEV sandwich extraction |
 | [VULN-011](audits/gmx-synthetics/exploits/VULN-011-missing-relay-nonce-validation.md) | High | Random (not sequential) relay nonce — keeper can reorder/skip transactions |
 
+**Exploit writeups:**
+- [VULN-003 exploit](audits/gmx-synthetics/exploits/VULN-003-relay-fee-swap-zero-slippage.md) — includes script output showing 2-72% MEV extraction
+- [VULN-011 exploit](audits/gmx-synthetics/exploits/VULN-011-missing-relay-nonce-validation.md) — includes script output proving reordering/skipping succeeds
+
 **Verification scripts:** `audits/gmx-synthetics/scripts/`
 
 **False positive analysis:** `audits/gmx-synthetics/exploits/false-positives/` (18 findings with detailed elimination rationale)
