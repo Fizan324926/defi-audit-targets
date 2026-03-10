@@ -1,32 +1,3 @@
-## Proof of Concept
-
-This PoC runs inside hathor-core's own test framework. No standalone mocks or simulations. Three levels of proof:
-
-1. **Full node simulation** (`TestSystemExitCrashesNode`) -- Uses `SimulatorTestCase` to run a complete Hathor node with mining, consensus, DAG, and vertex handler. Deploys the blueprint, creates a contract, mines blocks, then calls the malicious method through a mined block. Proves `crash_and_exit()` is triggered through the real vertex handler path.
-
-2. **Runner level** (`TestSystemExitEscapesRunner`) -- Uses `BlueprintTestCase` with real `HathorManager` + RocksDB. Registers blueprint through the real NC pipeline. Proves `SystemExit` escapes `Runner.call_public_method()` uncaught, while `ValueError` is caught as `NCFail`.
-
-3. **Root cause** (`TestBuiltinsExposure`) -- Checks `EXEC_BUILTINS` and `DISABLED_BUILTINS` directly. `SystemExit` is exposed, not blocked. `exit()` is blocked but `SystemExit` itself is not.
-
-### Setup
-
-```bash
-git clone https://github.com/HathorNetwork/hathor-core.git
-cd hathor-core
-python3.11 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-```
-
-Place the test file at `hathor_tests/nanocontracts/test_systemexit_escape.py` and run:
-
-```bash
-python -m pytest hathor_tests/nanocontracts/test_systemexit_escape.py -v -o "addopts="
-```
-
-### test_systemexit_escape.py
-
-```python
 """
 PoC: SystemExit sandbox escape in Hathor nano contracts
 
@@ -339,39 +310,3 @@ class TestBuiltinsExposure(BlueprintTestCase):
         assert not issubclass(SystemExit, Exception)
         assert issubclass(KeyboardInterrupt, BaseException)
         assert not issubclass(KeyboardInterrupt, Exception)
-```
-
-### Test output
-
-```
-============================= test session starts ==============================
-platform linux -- Python 3.11.0rc1, pytest-9.0.2
-
-TestSystemExitEscapesRunner::test_keyboardinterrupt_escapes_sandbox PASSED [ 14%]
-TestSystemExitEscapesRunner::test_normal_exception_is_caught PASSED [ 28%]
-TestSystemExitEscapesRunner::test_systemexit_escapes_sandbox PASSED [ 42%]
-TestSystemExitCrashesNode::test_systemexit_triggers_crash_and_exit PASSED [ 57%]
-TestBuiltinsExposure::test_all_baseexception_subclasses_exposed PASSED [ 71%]
-TestBuiltinsExposure::test_exception_hierarchy PASSED [ 85%]
-TestBuiltinsExposure::test_systemexit_exposed_not_blocked PASSED [100%]
-
-========================= 7 passed in 6.93s =========================
-```
-
-### What the tests prove
-
-**`TestSystemExitCrashesNode::test_systemexit_triggers_crash_and_exit`** is the end to end proof. It runs a full Hathor node via `SimulatorTestCase` with a Simulator, miner, wallet, RocksDB DAG, consensus engine, and vertex handler. The test:
-
-1. Registers `CrashBlueprint` in the NC catalog
-2. Creates a NC transaction calling `initialize()`, sends it to the mempool, mines 2 blocks to confirm it
-3. Verifies the contract state was written to storage
-4. Creates a NC transaction calling `crash_node()`, sends it to the mempool
-5. Mocks only `crash_and_exit` (to prevent `sys.exit(-1)` from killing the test process)
-6. Mines one block manually via `generate_mining_block()` + `cpu_mining_service.resolve()` + `propagate_tx()`
-7. Asserts `crash_and_exit` was called with `"on_new_vertex() failed"`
-
-The NC execution, the MeteredExecutor, the Runner, the block executor, and the vertex handler all run for real. The SystemExit from the blueprint escapes through the real exception handlers and reaches the real `except BaseException` in `vertex_handler._old_on_new_vertex()`. The only mock is `crash_and_exit` itself.
-
-**`TestSystemExitEscapesRunner::test_systemexit_escapes_sandbox`** isolates the sandbox escape at the Runner level. It registers a blueprint through the real NC pipeline with RocksDB and calls the method via `Runner.call_public_method()`. `assertRaises(SystemExit)` confirms it escapes uncaught.
-
-**`TestSystemExitEscapesRunner::test_normal_exception_is_caught`** is the control. Same setup, but `raise ValueError()`. `assertRaises(NCFail)` confirms normal exceptions are properly contained. The sandbox works for `Exception` subclasses but not for `BaseException` subclasses.
