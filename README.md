@@ -40,6 +40,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | [Stellar](https://immunefi.com/bug-bounty/stellar/) | $250,000 | Rust + C++ | 0 (clean audit) | [`audits/stellar/`](audits/stellar/findings/AUDIT-REPORT.md) | Complete |
 | [Xterio](https://immunefi.com/bug-bounty/xterio/) | $80,000 | Solidity | 0 (clean audit) | [`audits/xterio/`](audits/xterio/findings/AUDIT-REPORT.md) | Complete |
 | [Filecoin](https://immunefi.com/bug-bounty/filecoin/) | $150,000 | Go + Rust | 0 (clean audit) | [`audits/filecoin/`](audits/filecoin/findings/AUDIT-REPORT.md) | Complete |
+| [SushiSwap](https://immunefi.com/bug-bounty/sushiswap/) | $200,000 | Solidity | 1 High, 3 Medium, 5 Low | [`audits/sushiswap/`](audits/sushiswap/findings/AUDIT-REPORT.md) | Complete |
 
 ---
 
@@ -78,8 +79,10 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | 28 | Ref Finance | 001 | **MEDIUM** | Burrow liquidation creates permanent phantom farming shadows | [Report](audits/ref-finance/findings/IMMUNEFI-SUBMISSION-001.md) |
 | 29 | Hathor Network | 001 | **CRITICAL** | SystemExit/KeyboardInterrupt sandbox escape — permanent node crash via nano contract | [Report](audits/hathor-network/findings/IMMUNEFI-SUBMISSION-001.md) |
 | 30 | Hathor Network | 002 | **HIGH** | Fuel metering + memory limits completely unimplemented — infinite loop/OOM DoS | [Report](audits/hathor-network/findings/IMMUNEFI-SUBMISSION-002.md) |
+| 31 | SushiSwap | 002 | **HIGH** | IndexPool `_pow()` broken binary exponentiation — permanent DOS of `burnSingle()` | [Report](audits/sushiswap/findings/IMMUNEFI-SUBMISSION-002.md) |
+| 32 | SushiSwap | 001 | **MEDIUM** | CLMigrator wrong sqrtPrice reference causes token loss when `activeTick >= tickUpper` | [Report](audits/sushiswap/findings/IMMUNEFI-SUBMISSION-001.md) |
 
-**Total: 1 Critical, 6 High, 2 Medium-High, 19 Medium, 1 Low-Medium across 22 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network + Chainlink + Spark + Merchant Moe + Stellar + Xterio: clean audits — 0 findings)
+**Total: 1 Critical, 7 High, 2 Medium-High, 20 Medium, 1 Low-Medium across 23 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network + Chainlink + Spark + Merchant Moe + Stellar + Xterio + Filecoin: clean audits — 0 findings)
 
 ---
 
@@ -540,6 +543,35 @@ The protocol demonstrates exceptional defense-in-depth: 5-layer WASM-to-host val
 | Core | Informational | No explicit constant product post-check (invariant preserved by formula) |
 
 **Full audit report:** [`AUDIT-REPORT.md`](audits/stellar/findings/AUDIT-REPORT.md)
+
+---
+
+### SushiSwap — [`audits/sushiswap/`](audits/sushiswap/findings/AUDIT-REPORT.md)
+
+Comprehensive multi-generation AMM audit. 5 repositories: V2-Core (Uniswap V2 fork with SushiSwap migrator, ~2.1K LOC), V3-Core (unmodified Uniswap V3 fork, ~3.3K LOC), Trident (SushiSwap's proprietary multi-pool AMM on BentoBox — ConstantProduct, Hybrid/StableSwap, Concentrated Liquidity, IndexPool, ~5.4K LOC), V4-Core (PancakeSwap V4 fork — CLPoolManager, BinPoolManager, transient-storage Vault, ~5.4K LOC), V4-Periphery (CLMigrator, CLPositionManager, V4Router, ~5.4K LOC). ~21,600 LOC total. 100+ hypotheses tested across binary exponentiation, migration token accounting, staker reward indexing, fixed-point overflow, reserve staleness, and access control.
+
+**Result: 1 High, 3 Medium, 5 Low, 12+ Informational — 2 Immunefi submissions.**
+
+| ID | Severity | Component | Description |
+|----|----------|-----------|-------------|
+| H-01 | **High** | Trident/IndexPool | `_pow()` broken binary exponentiation — dead code (post-loop accumulation never executes since n=0) + overflow (fixed-point squaring without BASE division) = permanent DOS of `burnSingle()` |
+| M-01 | Medium | V4-Periphery/CLMigrator | Wrong sqrtPrice reference: uses `sqrtPriceX96` instead of `sqrtRatioBX96` when `activeTick >= tickUpper`, overestimating `amount1Consumed` and trapping user tokens in migrator |
+| M-02 | Medium | Trident/CLPoolStaker | `getReward()` view uses `positionId` instead of `incentiveId` as mapping key — returns wrong incentive data |
+| M-03 | Medium | Trident/StablePool | `burnSingle()` uses stale reserves (pre-burn balance) for internal swap pricing |
+| L-01–L-05 | Low | Various | Unsafe truncations (uint128/uint96/uint160), missing reentrancy guard on `collectFee`, missing early return for `s==0`, zero-address `barFeeTo` |
+
+**Key architectural observations:**
+- V2 is a standard Uniswap V2 fork; V3 is an unmodified Uniswap V3 fork — novel code is in Trident and V4
+- V4 is a PancakeSwap V4 fork (Copyright headers "Copyright (C) 2024 PancakeSwap"), with transient storage (tstore/tload) for settlement guards and single-locker vault design
+- Trident operates on BentoBox shares with 4 distinct pool types, each with different reserve types (uint112, uint128, uint256)
+- ConcentratedLiquidityPool `setPrice()` is NOT vulnerable to front-running — factory calls it atomically in same tx as CREATE2
+- TridentRouter `sweep()` is intentionally permissionless by design ("Recover mistakenly sent tokens")
+
+**False positives eliminated:** ConcentratedLiquidityPool setPrice() front-running (factory calls atomically), TridentRouter sweep() theft (by design), V4 Vault reentrancy (transient storage guards + single-locker pattern).
+
+**Full audit report:** [`AUDIT-REPORT.md`](audits/sushiswap/findings/AUDIT-REPORT.md)
+**Immunefi submissions:** [`IMMUNEFI-SUBMISSION-001.md`](audits/sushiswap/findings/IMMUNEFI-SUBMISSION-001.md) (CLMigrator), [`IMMUNEFI-SUBMISSION-002.md`](audits/sushiswap/findings/IMMUNEFI-SUBMISSION-002.md) (IndexPool _pow)
+**PoC files:** [`scripts/verify/`](audits/sushiswap/scripts/verify/)
 
 ---
 
