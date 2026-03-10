@@ -21,7 +21,7 @@
 
 A comprehensive security audit of GMX V2 Synthetics was conducted targeting all major attack surfaces: cross-chain bridging (LayerZero/Stargate), the Gelato relay system for gasless transactions, oracle price validation, and position management mechanics.
 
-After rigorous analysis of 20 initial findings, **18 were eliminated as false positives, known issues, or by-design behavior** through verification against the actual source code. **2 confirmed vulnerabilities** remain with verified code evidence, on-chain deployment confirmation, and working proof-of-concept scripts.
+After two rounds of rigorous analysis covering all 309 Solidity files (initial audit: 20 findings examined; re-audit: 12 additional potential findings examined), **30+ were eliminated as false positives, known issues, or by-design behavior** through verification against the actual source code. **2 confirmed vulnerabilities** remain with verified code evidence, on-chain deployment confirmation, and working proof-of-concept scripts.
 
 **Both vulnerabilities are in LIVE PRODUCTION code** — the GMX Express relay system deployed on Arbitrum mainnet with **230,062+ transactions** processed since November 2025.
 
@@ -130,9 +130,11 @@ minOutputAmount: 0,  // HARDCODED - NO SLIPPAGE PROTECTION
 
 ---
 
-## False Positives Eliminated (18)
+## False Positives Eliminated (30+)
 
-All initial findings below were rigorously verified against the source code and determined to be **not exploitable**:
+All findings below were rigorously verified against the source code and determined to be **not exploitable**:
+
+### Initial Audit — False Positives (18)
 
 | ID | Title | Why False Positive |
 |----|-------|--------------------|
@@ -155,7 +157,26 @@ All initial findings below were rigorously verified against the source code and 
 | VULN-019 | Impact tracking mismatch | Proportional pending impact is intended mechanism; prevents gaming |
 | VULN-020 | Oracle spread gaming | Traders don't control oracle prices or execution timing; keepers and Chainlink determine these |
 
-Detailed false positive analysis files are preserved in `exploits/false-positives/` for reference.
+### Re-Audit — Additional False Positives (12)
+
+From comprehensive re-audit covering all 309 files (6 parallel agent groups):
+
+| Area | Claim | Why Eliminated |
+|------|-------|----------------|
+| GLV system | ERC-4626 inflation attack | StrictBank `tokenBalances` prevents balance donation; `syncTokenBalance` is `onlyController` |
+| GLV system | First-depositor inflation | StrictBank provides primary defense; `minGlvTokens` is optional additional safeguard |
+| GLV withdrawal | poolValue negative SafeCast | SafeCast revert caught by try-catch/cancellation; user's GLV tokens returned safely |
+| GLV pricing | Market token price manipulation | `poolAmount` tracked in DataStore, not `balanceOf`; flash loans cannot affect it |
+| Relay router | Domain separator collision | Claim: library `address(this)` = same for all routers. Refuted: different struct hash overloads (address(0) vs actual account) make digests distinct — cross-replay impossible |
+| Relay router | Silent permit failure → fund loss | Transaction atomicity: if action fails, entire TX reverts including fee collection |
+| Order system | Position accounting sizeInTokens=0 | MIN_POSITION_SIZE_USD enforcement and exact-close guard prevent the edge case |
+| Order system | Stop-loss cancellation griefing | By design — users must be able to cancel their own orders |
+| ADL system | updateAdlState spam blocks ADL | Explicitly acknowledged in code comment as known design trade-off |
+| ADL system | ADL targeting not enforced | Explicitly acknowledged in code comment: "no validation that ADL is executed in order of position profit" |
+| Fee system | ClaimHandler terms bypass | No financial theft possible; claimable amounts keyed to `msg.sender`; compliance concern only |
+| Fee system | Fee distribution sandwich | Snapshot-based distribution to reward tracker; not sandwichable in-block |
+
+Detailed false positive analysis files are preserved in `exploits/false-positives/` and `agent-reports/` for reference.
 
 ---
 
@@ -316,7 +337,7 @@ AGGREGATE REAL-WORLD IMPACT:
 3. **Oracle system**: Timestamp validation, Chainlink reference, atomic operations
 4. **Position management**: Fee waterfall, liquidation, rounding, impact tracking
 
-### Key Contracts Reviewed
+### Key Contracts Reviewed — Initial Audit
 - RelayUtils.sol, BaseGelatoRelayRouter.sol, IRelayUtils.sol
 - LayerZeroProvider.sol, MultichainUtils.sol, MultichainVault.sol
 - Oracle.sol, ChainlinkPriceFeedUtils.sol, OracleUtils.sol
@@ -326,6 +347,22 @@ AGGREGATE REAL-WORLD IMPACT:
 - ExecuteDepositUtils.sol, ExecuteWithdrawalUtils.sol
 - MultichainClaimsRouter.sol, AutoCancelUtils.sol
 - PositionUtils.sol, IncreasePositionUtils.sol
+
+### Additional Contracts Reviewed — Re-Audit (all 309 files covered)
+- **GLV system**: glv/*, GlvRouter.sol, GlvDepositHandler.sol, GlvWithdrawalHandler.sol, GlvShiftHandler.sol (15+ files)
+- **Order system**: order/* — BaseOrderUtils, ExecuteOrderUtils, DecreaseOrderUtils, IncreaseOrderUtils, SwapOrderUtils, JitOrderHandler
+- **Position system**: position/* — DecreasePositionSwapUtils, Position.sol, PositionStoreUtils
+- **ADL + Liquidation**: adl/AdlUtils.sol, liquidation/LiquidationUtils.sol, AdlHandler.sol, LiquidationHandler.sol
+- **Fee + Pricing**: fee/*, pricing/* — FeeDistributor, FeeSwapUtils, PositionPricingUtils, SwapPricingUtils, PricingUtils
+- **Market**: market/* — MarketUtils, MarketToken, PositionImpactPoolUtils, MarketFactory
+- **Multichain extended**: MultichainRouter, MultichainGlvRouter, MultichainGmRouter, MultichainOrderRouter, MultichainSubaccountRouter, BridgeOutFromControllerUtils
+- **Config/DataStore**: config/*, data/* — Config, ConfigUtils, ConfigSyncer, AutoCancelSyncer, DataStore, Keys, Keys2
+- **Oracle extended**: EdgeDataStreamProvider, EdgeDataStreamVerifier, GmOracleProvider, ChainlinkDataStreamProvider, OracleModule
+- **Bank/Vault**: bank/*, deposit/*, withdrawal/*, claim/*
+- **Utils**: utils/*, gas/GasUtils.sol — GlobalReentrancyGuard, Calc, Precision, AccountUtils
+- **Role/Access**: role/*, feature/FeatureUtils.sol
+- **Shift + Migration**: shift/*, migration/GlpMigrator.sol
+- **Router extended**: ExchangeRouter, GlvRouter, SubaccountRouter
 
 ---
 
@@ -354,6 +391,13 @@ audits/gmx-synthetics/
 │   ├── VULN-003-relay-fee-swap-zero-slippage.md    # CONFIRMED
 │   ├── VULN-011-missing-relay-nonce-validation.md  # CONFIRMED
 │   └── false-positives/            # 18 eliminated findings (preserved for reference)
+├── agent-reports/                  # Re-audit parallel agent reports (all 309 files)
+│   ├── group1-glv-shift-migrator.md
+│   ├── group2-order-position-adl.md
+│   ├── group3-fee-pricing-market.md
+│   ├── group4-relay-router-reverification.md
+│   ├── group5-multichain-config-roles.md
+│   └── group6-oracle-bank-vault.md
 ├── scripts/
 │   ├── python/
 │   │   ├── verify_live_deployment.py           # On-chain verification
