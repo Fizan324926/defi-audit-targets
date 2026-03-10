@@ -33,6 +33,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | [Yearn Finance](https://immunefi.com/bug-bounty/yearnfinance/) | $200,000 | Solidity + Vyper | 5 Medium | [`audits/yearn-finance/`](audits/yearn-finance/findings/CONSOLIDATED-AUDIT-REPORT.md) | Complete |
 | [Spark (SparkLend)](https://immunefi.com/bug-bounty/spark/) | $5,000,000 | Solidity | 0 (clean audit) | [`audits/spark/`](audits/spark/findings/AUDIT-REPORT.md) | Complete |
 | [Merchant Moe (LFJ)](https://immunefi.com/bug-bounty/merchantmoe/) | $100,000 | Solidity | 0 (clean audit) | [`audits/merchant-moe/`](audits/merchant-moe/findings/AUDIT-REPORT.md) | Complete |
+| [OpenZeppelin](https://immunefi.com/bug-bounty/openzeppelin/) | $500,000 | Solidity | 2 High, 4 Medium | [`audits/openzeppelin/`](audits/openzeppelin/findings/AUDIT-REPORT.md) | Complete |
 
 ---
 
@@ -64,7 +65,10 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | 22 | Yearn | 004 | **MEDIUM** | Zap.sol zero slippage on intermediate Curve pool operations — MEV | [Report](audits/yearn-finance/findings/IMMUNEFI-SUBMISSION-004.md) |
 | 23 | Yearn | 005 | **MEDIUM** | StakingRewardDistributor division by zero when total_weight is zero | [Report](audits/yearn-finance/findings/IMMUNEFI-SUBMISSION-005.md) |
 
-**Total: 4 High, 2 Medium-High, 16 Medium, 1 Low-Medium across 16 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network + Chainlink + Spark + Merchant Moe: clean audits — 0 findings)
+| 24 | OpenZeppelin | 001 | **HIGH** | LimitOrderHook withdrawal underflow — permanent fund lock for later withdrawers | [Report](audits/openzeppelin/findings/IMMUNEFI-SUBMISSION-001.md) |
+| 25 | OpenZeppelin | 002 | **HIGH** | VotesConfidential FHE.sub underflow — voting power wrap-around via modular arithmetic | [Report](audits/openzeppelin/findings/IMMUNEFI-SUBMISSION-002.md) |
+
+**Total: 6 High, 2 Medium-High, 16 Medium, 1 Low-Medium across 17 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network + Chainlink + Spark + Merchant Moe: clean audits — 0 findings)
 
 ---
 
@@ -407,6 +411,30 @@ The protocol demonstrates strong security engineering: dual-precision rewarder s
 | VeMoe cap | Informational | Uses oldBalance for cap (conservative delay, not exploitable) |
 
 **Full audit report:** [`AUDIT-REPORT.md`](audits/merchant-moe/findings/AUDIT-REPORT.md)
+
+---
+
+### OpenZeppelin — [`audits/openzeppelin/`](audits/openzeppelin/findings/AUDIT-REPORT.md)
+
+Multi-repository audit of OpenZeppelin's Solidity libraries. 4 repositories: openzeppelin-contracts (v5.6 — core library including crosschain bridges, ERC-4337, ERC-7579 modular accounts, RLP/TrieProof), openzeppelin-contracts-upgradeable (upgradeable variants), openzeppelin-confidential-contracts (FHE/ERC7984 confidential tokens using Zama fhEVM — encrypted balances, ACL, governance), and uniswap-hooks (v1.2.0 — Uniswap V4 hook library with LimitOrderHook, AntiSandwichHook, ReHypothecationHook, LiquidityPenaltyHook, custom curves, oracles, fee hooks). 100+ hypotheses tested.
+
+**Findings (2 High, 4 Medium, 4 Low, 4 Informational — 2 Immunefi submissions):**
+
+| ID | Severity | Contract | Description |
+|----|----------|----------|-------------|
+| [001](audits/openzeppelin/findings/IMMUNEFI-SUBMISSION-001.md) | **High** | LimitOrderHook.sol | Withdrawal underflow — proportional checkpoint formula breaks with multi-user orders, permanently locking late withdrawer funds |
+| [002](audits/openzeppelin/findings/IMMUNEFI-SUBMISSION-002.md) | **High** | VotesConfidential.sol | FHE.sub modular arithmetic wraps voting power near uint64.max (FHESafeMath.tryDecrease exists but unused) |
+| M-01 | Medium | BridgeFungible.sol | `address(bytes20(toEvm))` silently truncates non-20-byte addresses — token loss |
+| M-02 | Medium | ReHypothecationHook.sol | First deposit uses spot pool price — flash-loan manipulation of initial share value |
+| M-03 | Medium | draft-ERC4337Utils.sol | BLOCK_RANGE_FLAG requires BOTH fields flagged (AND logic) — silently corrupts mixed inputs |
+| M-04 | Medium | AntiSandwichHook.sol | Incomplete checkpoint tick range — ticks outside last price movement not captured |
+
+**Well-defended areas:** BaseHook (onlyPoolManager + address validation), BaseCustomAccounting (position salt derivation), BaseCustomCurve (ERC-6909 management), CurrencySettler (zero-amount early return), OracleHook (Panoptic TWAP), openzeppelin-contracts-upgradeable (faithful mirror with storage gaps).
+
+**False positives eliminated:** LiquidityPenaltyHook double-penalty (delta accounting mathematically verified), AntiSandwichHook lpFeeOverride divergence (Pool.swap uses slot0.lpFee when not flagged), Oracle binary search infinite loop (convergence guaranteed by getSurroundingObservations bounds).
+
+**Full audit report:** [`AUDIT-REPORT.md`](audits/openzeppelin/findings/AUDIT-REPORT.md)
+**Immunefi submissions:** [`IMMUNEFI-SUBMISSION-001.md`](audits/openzeppelin/findings/IMMUNEFI-SUBMISSION-001.md), [`IMMUNEFI-SUBMISSION-002.md`](audits/openzeppelin/findings/IMMUNEFI-SUBMISSION-002.md)
 
 ---
 
