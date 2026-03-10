@@ -17,6 +17,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 
 | Program | Bounty | Language | Audit Folder | Status |
 |---------|--------|----------|--------------|--------|
+| [Sky (MakerDAO)](https://immunefi.com/bug-bounty/sky/) | $10,000,000 | Solidity / EVM | [`audits/sky/`](audits/sky/README.md) | In Progress |
 | [Orca Whirlpool](https://immunefi.com/bug-bounty/orca/) | $500,000 | Rust / Solana | [`audits/orca-whirlpool/`](audits/orca-whirlpool/README.md) | In Progress |
 | [GMX V2 Synthetics](https://immunefi.com/bug-bounty/gmx/) | $5,000,000 | Solidity / EVM | [`audits/gmx-synthetics/`](audits/gmx-synthetics/README.md) | Complete |
 
@@ -43,6 +44,20 @@ Concentrated liquidity AMM on Solana (Uniswap V3-style). Covers the adaptive fee
 - [M-02 exploit](audits/orca-whirlpool/findings/exploits/M-02-exploit.md)
 
 **Verification scripts:** `audits/orca-whirlpool/scripts/verify/`
+
+---
+
+### Sky Protocol — [`audits/sky/`](audits/sky/README.md)
+
+One of the largest DeFi protocols ($8B+ TVL). CDP stablecoin (DAI/USDS), savings vaults, lockstake governance staking, surplus buyback engine, cross-chain bridges.
+
+**Findings:**
+
+| ID | Severity | Contract | Description |
+|----|----------|----------|-------------|
+| [001](audits/sky/findings/001-staking-rewards-duration-yield-loss.md) | High | StakingRewards.sol | `setRewardsDuration` mid-period integer truncation destroys staker yield |
+| [002](audits/sky/findings/002-splitter-farm-zero-dos.md) | Medium | Splitter.sol | `kick()` reverts when `farm==address(0)` + `burn<WAD`, DoSing SBE |
+| [003](audits/sky/findings/003-staking-rewards-zero-duration.md) | Medium | StakingRewards.sol | `setRewardsDuration(0)` permanently bricks reward distribution |
 
 ---
 
