@@ -1,0 +1,42 @@
+{
+  "name": "@reserve-protocol/reserve-index-dtf",
+  "version": "0.1.0",
+  "description": "Reserve Folio Protocol",
+  "license": "MIT",
+  "private": true,
+  "dependencies": {
+    "@openzeppelin/contracts": "5.1.0",
+    "@openzeppelin/contracts-upgradeable": "5.1.0",
+    "@prb/math": "4.1.0",
+    "@reserve-protocol/trusted-fillers": "github:reserve-protocol/trusted-fillers#eabd9dbd60e8aaaec2c50db43742991e4cb55208",
+    "@reserve-protocol/reserve-governor": "github:reserve-protocol/reserve-governor#c2b17012567bafcb99b03d20f31d516fd5482f93",
+    "forge-std": "github:foundry-rs/forge-std#v1.14.0"
+  },
+  "devDependencies": {
+    "prettier": "^3.5.3",
+    "prettier-plugin-solidity": "^1.4.3",
+    "solhint": "^5.1.0",
+    "solhint-plugin-prettier": "^0.1.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  },
+  "scripts": {
+    "format": "prettier --write \"./**/*.{js,ts,json,md,sol,yaml,yml}\"",
+    "format:check": "prettier --check \"./**/*.{js,ts,json,md,sol,yaml,yml}\"",
+    "lint": "solhint --fix 'contracts/**/*.sol' 'script/**/*.sol'",
+    "lint:check": "solhint 'contracts/**/*.sol' 'script/**/*.sol'",
+    "compile": "forge compile",
+    "test": "forge test --no-match-test extreme",
+    "test:extreme": "forge test --match-test extreme",
+    "test:all": "forge test",
+    "size": "forge compile --sizes",
+    "selectors:upload": "forge selectors upload --all",
+    "coverage": "forge coverage --report lcov --no-match-coverage '(script|test)'",
+    "coverage:summary": "forge coverage --report summary --no-match-coverage '(script|test)'",
+    "deploy": "forge script script/Deploy.s.sol:DeployScript --slow",
+    "playground": "forge script script/Playground.s.sol:PlaygroundScript --slow",
+    "anvil": "anvil --fork-url https://ethereum-rpc.publicnode.com --chain-id 31337 --prune-history",
+    "export": "tsx script/export.ts"
+  },
+  "packageManager": "pnpm@10.28.2"
+}
