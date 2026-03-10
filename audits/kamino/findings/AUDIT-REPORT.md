@@ -1,6 +1,6 @@
 # Kamino Finance — Security Audit Report
 
-**Date:** 2026-03-02
+**Date:** 2026-03-05
 **Target:** Kamino Finance (Solana DeFi protocol suite)
 **Bounty:** Immunefi, max $100,000
 **Programs Audited:** klend (lending), kvault (vault), scope (oracle), kfarms (farming)

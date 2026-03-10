@@ -1,0 +1,9 @@
+[package]
+name = "kamino-scope-v10-poc"
+version = "0.1.0"
+edition = "2021"
+description = "PoC for missing multiplier validation in Scope's ChainlinkX v10 oracle adapter"
+
+[dependencies]
+decimal-wad = "0.1"
+num-bigint = "0.4"
