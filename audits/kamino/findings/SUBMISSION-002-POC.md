@@ -1,3 +1,42 @@
+## Proof of Concept
+
+### Compliance Note
+
+**No mainnet or testnet testing was performed.** This PoC is a standalone Rust project that replicates the exact math from `update_price_v10` using the same crates Scope uses on chain (`decimal-wad v0.1`, `num-bigint v0.4`). Everything runs locally. No deployed contracts, oracles, or third party systems are touched. The on chain evidence section only references publicly readable account data and no transactions were submitted.
+
+### How to Run
+
+```bash
+mkdir kamino-scope-v10-poc && cd kamino-scope-v10-poc
+# Create Cargo.toml and src/lib.rs as shown below
+cargo test -- --nocapture
+```
+
+### Dependencies
+
+- Rust 1.75+
+- `decimal-wad v0.1` (same crate Scope uses on chain, resolves to 0.1.9)
+- `num-bigint v0.4` (same crate Scope uses)
+
+No network, no RPC, no external APIs needed.
+
+### Cargo.toml
+
+```toml
+[package]
+name = "kamino-scope-v10-poc"
+version = "0.1.0"
+edition = "2021"
+description = "PoC for missing multiplier validation in Scope's ChainlinkX v10 oracle adapter"
+
+[dependencies]
+decimal-wad = "0.1"
+num-bigint = "0.4"
+```
+
+### src/lib.rs
+
+```rust
 /// Proof of Concept: Missing Multiplier Validation in Scope's ChainlinkX v10 Oracle
 ///
 /// This PoC replicates the exact arithmetic from `update_price_v10` (chainlink.rs:480-487)
@@ -716,3 +755,87 @@ mod tests {
         println!("  Estimated bad debt: $1.75M-$7M across xStocks market");
     }
 }
+```
+
+### Test Results (all 10 pass)
+
+```
+running 10 tests
+test tests::poc_a_zero_multiplier ... ok
+test tests::poc_b_extreme_multiplier ... ok
+test tests::poc_c_v3_vs_v10_confidence ... ok
+test tests::poc_d_bounds_check ... ok
+test tests::poc_e_tokenized_price_cross_reference ... ok
+test tests::poc_f_stock_split_replay ... ok
+test tests::poc_g_suspension_bypass ... ok
+test tests::poc_h_stale_reports ... ok
+test tests::supplementary_parse_accepts_zero ... ok
+test tests::integration_full_attack_aaplx ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+```
+
+### Test Matrix
+
+| Test | What it shows | Impact |
+|------|--------------|--------|
+| **PoC A: Zero Multiplier** | `current_multiplier = 0` goes straight through the v10 math. $150 stock becomes $0 in the oracle. | Mass liquidation of all xStocks positions |
+| **PoC B: Extreme Multiplier** | `current_multiplier = 1000*WAD` produces a $150,000 oracle price. Not rejected. | Borrow against 1000x inflated collateral, protocol insolvency |
+| **PoC C: v3 vs v10** | Same unreliable price (66.7% spread): v3 REJECTS it via confidence check, v10 ACCEPTS it. | v10 is the only adapter without confidence validation |
+| **PoC D: Bounds Check** | Shows a simple `0 < mult <= 10*WAD` check correctly catches bad values while allowing legitimate splits (1x, 2x, 4x, 10x). | Simple fix catches all attack vectors |
+| **PoC E: tokenized_price** | The ignored `tokenized_price` field would catch zero mult ($0 vs $150) and extreme mult ($150K vs $150) while passing normal operation. | Ignored DON signed field would prevent all attacks |
+| **PoC F: Stock Split Replay** | Full end to end attack. Pre split report with activation=0 submitted after admin resume. Oracle says $150 per unit but token rebased to $75 per unit. 2x overvaluation. Bad debt calculated. | Complete attack: $10,500 bad debt per $30,000 position |
+| **PoC G: Suspension Bypass** | `activation_date_time=0` bypasses all suspension logic even with 10x multiplier divergence or zero multiplier. | Suspension mechanism is dead code in normal state |
+| **PoC H: Stale Reports** | Expired report (expired 2h ago) accepted. Premature report (valid from is in the future) accepted. Post resume stale replay works. | Stale report replay attack is real |
+| **Supplementary** | `chainlink_bigint_value_parse(BigInt(0))` returns `Decimal(0)`. Confirms the parse function accepts zero. | Root cause: no zero check in parse |
+| **Integration** | Full attack sequence using real mainnet AAPLx price ($263.17), dollar amounts, LTV math, unprotected entries. | $1.75M to $7M potential bad debt |
+
+### End to End Attack Flow
+
+```
+Step 1: Attacker subscribes to Chainlink Data Streams, archives DON signed reports
+Step 2: Attacker opens KLend position (deposits AAPLx, borrows USDC at $263.17 valuation)
+Step 3: Stock split announced, Chainlink begins embedding activation_date_time
+Step 4: Blackout triggers: oracle suspended for 24h
+Step 5: Admin resumes oracle, observations_timestamp reset to clock.unix_timestamp
+Step 6: Attacker submits archived pre split report:
+   -> observations_timestamp > resume_timestamp (passes ordering)
+   -> activation_date_time = 0 (bypasses suspension, Attack Vector 2)
+   -> expires_at not checked (stale report accepted, Attack Vector 3)
+   -> no check_execution_ctx (can sandwich via CPI, Attack Vector 4)
+   -> Old multiplier applied, oracle price 2x inflated
+Step 7: Attacker borrows additional USDC against inflated collateral (atomic via CPI)
+Step 8: Correct report eventually submitted, price corrects
+Step 9: Attacker position undercollateralized, KLend eats the bad debt = PROTOCOL INSOLVENCY
+```
+
+### On Chain Evidence (read only, no transactions submitted)
+
+All data below was read directly from Solana mainnet on March 5 2026 by decoding the OraclePrices account (`3t4JZcueEzTbVP6kLxXrL3VpWx45jDer4eqysweBchNH`) and OracleMappings account (`4zh6bmb77qX2CL7t5AJYCqa6YqFafbz3QJNeFvZjLowg`). All entries were fresh (updated within seconds of the read). Oracle type for all 13 entries is `37` (ChainlinkX). No transactions were submitted.
+
+| Entry | Token | Live Price | ref_price | Protected? |
+|-------|-------|-----------|-----------|------------|
+| #258 | AAPLx | $263.17 | #26 (Pyth AAPL/USD) | Yes (5%) |
+| #260 | HOODx | $82.25 | #94 (Pyth HOOD/USD) | Yes (5%) |
+| **#262** | **Unknown** | **$105.28** | **0xFFFF (None)** | **NO** |
+| #264 | GOOGLx | $303.54 | #34 (Pyth GOOGL/USD) | Yes (5%) |
+| **#266** | **Unknown** | **$668.41** | **0xFFFF (None)** | **NO** |
+| #268 | NVDAx | $183.08 | #42 (Pyth NVDA/USD) | Yes (5%) |
+| #270 | MSTRx | $146.37 | #72 (Pyth MSTR/USD) | Yes (5%) |
+| #272 | TSLAx | $406.06 | #56 (Pyth TSLA/USD) | Yes (5%) |
+| #274 | AMZNx | $216.94 | #50 (Pyth AMZN/USD) | Yes (5%) |
+| #276 | COINx | $208.74 | #64 (Pyth COIN/USD) | Yes (5%) |
+| #278 | Unknown | $687.34 | #284 (Pyth ref) | Yes (5%) |
+| #280 | QQQx | $611.49 | #90 (Pyth QQQ/USD) | Yes (5%) |
+| **#282** | **Unknown** | **$406.13** | **0xFFFF (None)** | **NO** |
+
+Key accounts (all verified live on Solana mainnet March 5 2026):
+
+| Account | Address | Verification |
+|---------|---------|-------------|
+| Scope Program | `HFn8GnPADiny6XqUoWE8uRPPxb29ikn4yTuPa9MF2fWJ` | Executable, matches `program_id.rs` in source |
+| OracleMappings | `4zh6bmb77qX2CL7t5AJYCqa6YqFafbz3QJNeFvZjLowg` | 29704 bytes, owned by Scope program |
+| OraclePrices | `3t4JZcueEzTbVP6kLxXrL3VpWx45jDer4eqysweBchNH` | 28712 bytes, oracle_mappings field points to account above |
+| Chainlink Verifier | `Gt9S41PtjR58CbG9JhJ3J6vxesqrNAswbWYbLNTMZA3c` | Executable, matches `VERIFIER_PROGRAM_ID` in chainlink.rs |
+
+All 13 feed IDs start with `0x000a`, which confirms they use the v10 report schema.
