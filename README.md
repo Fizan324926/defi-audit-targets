@@ -71,7 +71,6 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | 21 | Yearn | 003 | **MEDIUM** | RewardPool/dYFIRewardPool division by zero when ve_supply is zero | [Report](audits/yearn-finance/findings/IMMUNEFI-SUBMISSION-003.md) |
 | 22 | Yearn | 004 | **MEDIUM** | Zap.sol zero slippage on intermediate Curve pool operations — MEV | [Report](audits/yearn-finance/findings/IMMUNEFI-SUBMISSION-004.md) |
 | 23 | Yearn | 005 | **MEDIUM** | StakingRewardDistributor division by zero when total_weight is zero | [Report](audits/yearn-finance/findings/IMMUNEFI-SUBMISSION-005.md) |
-
 | 24 | OpenZeppelin | 001 | **HIGH** | LimitOrderHook withdrawal underflow — permanent fund lock for later withdrawers | [Report](audits/openzeppelin/findings/IMMUNEFI-SUBMISSION-001.md) |
 | 25 | OpenZeppelin | 002 | **HIGH** | VotesConfidential FHE.sub underflow — voting power wrap-around via modular arithmetic | [Report](audits/openzeppelin/findings/IMMUNEFI-SUBMISSION-002.md) |
 | 26 | Flamingo | 001 | **MEDIUM** | ProxySwapTokenInForTokenOut checks LP balance instead of input token — swap DoS | [Report](audits/flamingo-finance/findings/IMMUNEFI-SUBMISSION-001.md) |
