@@ -54,10 +54,8 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | 12 | Olympus | 010 | **MEDIUM** | Heart beat front-running via predictable price updates | [Report](audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-010.md) |
 | 13 | Olympus | 001 | **MEDIUM** | YieldRepo hardcoded `backingPerToken` ($11.33) | [Report](audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-001.md) |
 | 14 | Beanstalk | 001 | **MED-HIGH** | SOP/Flood zero-slippage swap + manipulable spot deltaB | [Report](audits/beanstalk/findings/IMMUNEFI-SUBMISSION-001.md) |
-
 | 15 | Kamino | 002 | **HIGH** | Permissionless crank exploits missing multiplier validation to corrupt xStocks prices | [Report](audits/kamino/findings/IMMUNEFI-SUBMISSION-002.md) |
 | 16 | Kamino | 001 | **LOW-MED** | ChainlinkX v10 ignores `tokenized_price` — manual `price * multiplier` may diverge | [Report](audits/kamino/findings/IMMUNEFI-SUBMISSION-001.md) |
-
 | 17 | Origin | 001 | **MEDIUM** | OETHPlumeVault `_mint` override dead code — access control bypass | [Report](audits/origin-protocol/findings/IMMUNEFI-SUBMISSION-001.md) |
 | 18 | Origin | 002 | **MEDIUM** | OETHOracleRouter unsafe int256→uint256 cast (missing SafeCast) | [Report](audits/origin-protocol/findings/IMMUNEFI-SUBMISSION-002.md) |
 | 19 | Yearn | 001 | **MEDIUM** | CombinedChainlinkOracle missing zero/negative price validation — redemption DoS | [Report](audits/yearn-finance/findings/IMMUNEFI-SUBMISSION-001.md) |
