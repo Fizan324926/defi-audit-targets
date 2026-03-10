@@ -10,3 +10,9 @@ audits/gmx-synthetics/gmx-contracts/
 audits/sparklend/src/
 audits/olympus-v3/src/
 audits/olympus-v3/deployments/
+
+# Olympus DAO source repos (too large)
+audits/olympus-dao/source/
+audits/olympus-dao/bophades/src/
+audits/olympus-dao/bophades/lib/
+audits/olympus-dao/bophades/.git
