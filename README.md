@@ -39,18 +39,20 @@ Concentrated liquidity AMM on Solana (Uniswap V3-style). Covers the adaptive fee
 
 ### GMX V2 Synthetics — [`audits/gmx-synthetics/`](audits/gmx-synthetics/README.md)
 
-Decentralized perpetual exchange on Arbitrum/Avalanche ($700M+ TVL). Covers the Gelato relay system for gasless transactions, LayerZero cross-chain bridging, oracle price validation, and position management.
+Decentralized perpetual exchange on Arbitrum/Avalanche ($265-400M TVL, ~$270M daily volume). Covers the Gelato relay system ("GMX Express") for gasless transactions, LayerZero cross-chain bridging, oracle price validation, and position management.
+
+**Both vulnerabilities confirmed LIVE on Arbitrum mainnet** — 230,062+ relay transactions processed since November 2025, ~2,212 txns/day.
 
 **Confirmed Findings (2 of 20 initial — 18 eliminated as false positives):**
 
-| ID | Severity | Description |
-|----|----------|-------------|
-| [VULN-003](audits/gmx-synthetics/exploits/VULN-003-relay-fee-swap-zero-slippage.md) | High | `minOutputAmount: 0` hardcoded in relay fee swap — MEV sandwich extraction |
-| [VULN-011](audits/gmx-synthetics/exploits/VULN-011-missing-relay-nonce-validation.md) | High | Random (not sequential) relay nonce — keeper can reorder/skip transactions |
+| ID | Severity | Description | Estimated Annual Impact |
+|----|----------|-------------|------------------------|
+| [VULN-003](audits/gmx-synthetics/exploits/VULN-003-relay-fee-swap-zero-slippage.md) | High | `minOutputAmount: 0` hardcoded in relay fee swap — unprotected slippage | $74K-$297K (volatility) |
+| [VULN-011](audits/gmx-synthetics/exploits/VULN-011-missing-relay-nonce-validation.md) | High | Random (not sequential) relay nonce — keeper can reorder/skip transactions | $26M+ risk exposure |
 
-**Exploit writeups:**
-- [VULN-003 exploit](audits/gmx-synthetics/exploits/VULN-003-relay-fee-swap-zero-slippage.md) — includes script output showing 2-72% MEV extraction
-- [VULN-011 exploit](audits/gmx-synthetics/exploits/VULN-011-missing-relay-nonce-validation.md) — includes script output proving reordering/skipping succeeds
+**Exploit writeups (with verification script output and on-chain data):**
+- [VULN-003 exploit](audits/gmx-synthetics/exploits/VULN-003-relay-fee-swap-zero-slippage.md) — loss tables from price volatility, MEV sandwich model, on-chain deployment proof
+- [VULN-011 exploit](audits/gmx-synthetics/exploits/VULN-011-missing-relay-nonce-validation.md) — reordering/skipping demo, cancellation impossibility, real-world damage scenarios
 
 **Verification scripts:** `audits/gmx-synthetics/scripts/`
 
