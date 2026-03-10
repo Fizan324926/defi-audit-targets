@@ -1,20 +1,13 @@
 """
 PoC: SystemExit sandbox escape in Hathor nano contracts
 
-Three levels of proof:
-
-1. Unit test: SystemExit escapes Runner.call_public_method() uncaught,
-   while ValueError is properly caught as NCFail. Runs against real
-   HathorManager + RocksDB.
-
-2. Integration test: Full node simulation with Simulator. Registers a
-   malicious blueprint, creates a NC transaction, mines blocks so it
-   gets included and executed. Mocks crash_and_exit to capture the call
-   instead of actually killing the process. Proves crash_and_exit is
-   triggered through the real vertex_handler path with the real tx hash.
-
-3. Builtins verification: SystemExit is in EXEC_BUILTINS and NOT in
-   DISABLED_BUILTINS. exit() is blocked but SystemExit itself is not.
+Runs inside hathor-core's own test framework. The main test
+(test_systemexit_triggers_crash_and_exit) uses SimulatorTestCase to spin
+up a full Hathor node, deploy a malicious blueprint, mine blocks, then
+trigger crash_and_exit through the real vertex handler path. It also
+verifies that the block and transaction persist in RocksDB after the
+crash, which is what makes this a permanent boot loop rather than a
+one-time crash.
 """
 
 from io import StringIO
@@ -73,17 +66,8 @@ MALICIOUS_BLUEPRINT_SRC = dedent('''
 ''')
 
 
-# =========================================================================
-# Test 1: Unit level -- SystemExit escapes Runner (real HathorManager)
-# =========================================================================
-
 class TestSystemExitEscapesRunner(BlueprintTestCase):
-    """Proves SystemExit escapes the Runner's exception handlers.
-
-    Uses BlueprintTestCase which creates a real HathorManager with RocksDB.
-    The blueprint is registered through the actual NC pipeline and executed
-    via Runner.call_public_method().
-    """
+    """SystemExit escapes the Runner -- real HathorManager + RocksDB."""
 
     def test_systemexit_escapes_sandbox(self):
         """SystemExit propagates uncaught through MeteredExecutor and Runner.
@@ -150,24 +134,8 @@ class TestSystemExitEscapesRunner(BlueprintTestCase):
             )
 
 
-# =========================================================================
-# Test 2: Integration -- Full node simulation, crash_and_exit triggered
-# =========================================================================
-
 class TestSystemExitCrashesNode(SimulatorTestCase):
-    """Proves SystemExit triggers crash_and_exit through the full node path.
-
-    Uses SimulatorTestCase which runs a complete Hathor node with mining,
-    consensus, DAG storage, and vertex handler. The malicious blueprint is
-    registered in the NC catalog, a transaction calling the method is created,
-    and blocks are mined to include and execute it. crash_and_exit is mocked
-    to capture the call instead of killing the process.
-
-    This is the same execution path as production: transaction enters mempool,
-    miner includes it in a block, block is processed by vertex_handler, NC
-    code runs, SystemExit escapes, vertex_handler catches it as BaseException,
-    crash_and_exit is called.
-    """
+    """Full node simulation -- crash_and_exit triggered, block persists in DAG."""
     __test__ = True
 
     def setUp(self):
@@ -221,21 +189,14 @@ class TestSystemExitCrashesNode(SimulatorTestCase):
         return nc
 
     def test_systemexit_triggers_crash_and_exit(self):
-        """Full path: deploy blueprint, call method, mine block, node crashes.
+        """Deploy blueprint, call method via mined block, node crashes.
 
-        1. Create NC transaction calling initialize() -- succeeds
-        2. Mine blocks so initialize() executes -- contract created
-        3. Stop the miner (we'll mine manually from here)
-        4. Create NC transaction calling crash_node() -- enters mempool
-        5. Mock crash_and_exit so we can capture it
-        6. Mine one block manually to execute crash_node()
-        7. Assert crash_and_exit was called
-
-        The only mock is crash_and_exit itself, because we can't let
-        sys.exit(-1) kill the test process. Everything else is real:
-        real DAG, real consensus, real vertex handler, real NC execution.
+        The only mock is crash_and_exit itself -- can't let sys.exit(-1)
+        kill the test process. Everything else is real: real NC execution,
+        real MeteredExecutor, real Runner, real block executor, real
+        vertex handler, real RocksDB storage.
         """
-        # Step 1-2: Deploy the contract
+        # Deploy the contract
         nc_tx = self._gen_nc_tx(self.crash_blueprint_id, 'initialize', [self.token_uid])
         self.manager.cpu_mining_service.resolve(nc_tx)
         self.manager.on_new_tx(nc_tx)
@@ -246,51 +207,68 @@ class TestSystemExitCrashesNode(SimulatorTestCase):
         trigger = StopAfterNMinedBlocks(self.miner, quantity=2)
         self.assertTrue(self.simulator.run(14400, trigger=trigger))
 
-        # Verify contract was created successfully
         nc_storage = self.manager.get_best_block_nc_storage(nc_id)
         self.assertEqual(
             nc_storage.get_obj(b'token_uid', TOKEN_NC_TYPE),
             self.token_uid
         )
 
-        # Step 3: Stop the miner so we control block creation
+        # Stop the miner so we control block creation from here
         self.miner.stop()
 
-        # Step 4: Create the malicious transaction
+        # Create the malicious transaction
         self.manager.reactor.advance(10)
         crash_tx = self._gen_nc_tx(nc_id, 'crash_node', [])
         self.manager.cpu_mining_service.resolve(crash_tx)
         self.manager.on_new_tx(crash_tx)
         self.assertIsNone(crash_tx.get_metadata().voided_by)
 
-        # Step 5: Mock crash_and_exit so it doesn't kill the process.
+        # Mock crash_and_exit so it doesn't actually kill the process
         execution_manager_mock = Mock(spec_set=ExecutionManager)
         self.manager.vertex_handler._execution_manager = execution_manager_mock
 
-        # Step 6: Mine a block manually. This block will include the
-        # crash_node() transaction. When vertex_handler processes the
-        # block, NC execution runs, SystemExit escapes, and crash_and_exit
-        # is called.
+        # Mine a block that includes crash_node(). vertex_handler
+        # processes it, NC execution runs, SystemExit escapes, and
+        # crash_and_exit is called.
         self.manager.reactor.advance(1)
         block = self.manager.generate_mining_block()
         self.manager.cpu_mining_service.resolve(block)
         self.manager.propagate_tx(block)
 
-        # Step 7: crash_and_exit was called. The node would be dead.
+        # crash_and_exit was called -- node would be dead
         execution_manager_mock.crash_and_exit.assert_called()
-
-        # The call includes the failing vertex info
         call_args = execution_manager_mock.crash_and_exit.call_args
         reason = call_args.kwargs.get('reason', call_args.args[0] if call_args.args else '')
         self.assertIn('on_new_vertex() failed', reason)
 
+        # -- DAG persistence proof --
+        # The block was saved to RocksDB BEFORE the exception propagated.
+        # _unsafe_save_and_run_consensus (vertex_handler.py:229) calls
+        # save_transaction(vertex) before unsafe_update runs NC execution.
+        # So the block is in storage even though the node crashed.
+        self.assertTrue(
+            self.manager.tx_storage.transaction_exists(block.hash),
+            "block must persist in storage after crash"
+        )
+        self.assertTrue(
+            self.manager.tx_storage.transaction_exists(crash_tx.hash),
+            "malicious tx must persist in storage after crash"
+        )
 
-# =========================================================================
-# Test 3: Builtins verification
-# =========================================================================
+        # The except BaseException handler (vertex_handler.py:178-182)
+        # marks the block with CONSENSUS_FAIL_ID before calling
+        # crash_and_exit. This is the state a restarting node would see.
+        block_from_storage = self.manager.tx_storage.get_transaction(block.hash)
+        block_meta = block_from_storage.get_metadata()
+        self.assertIn(
+            self._settings.CONSENSUS_FAIL_ID,
+            block_meta.voided_by or set(),
+            "block must be marked CONSENSUS_FAIL_ID after crash"
+        )
+
 
 class TestBuiltinsExposure(BlueprintTestCase):
-    """Verifies the root cause: dangerous builtins exposed, not blocked."""
+    """Root cause: dangerous builtins exposed, not blocked."""
 
     def test_systemexit_exposed_not_blocked(self):
         assert 'SystemExit' in EXEC_BUILTINS

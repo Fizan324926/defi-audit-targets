@@ -1,44 +1,30 @@
 # Immunefi Submission Guide: SUBMISSION-001
 
-## 1. Title
+## Title
 
 ```
 Nano contract blueprint can raise SystemExit and crash the full node
 ```
 
-## 2. Assets and Impact
+## Assets and Impact
 
 - **Program**: Hathor Network (https://immunefi.com/bug-bounty/hathornetwork/)
 - **Asset**: Blockchain/DLT -- hathor-core (https://github.com/HathorNetwork/hathor-core)
 - **Impact**: Network unable to confirm new transactions
 
-## 3. Severity Level
+## Severity
 
-- **High** -- permanent node crash via sandbox escape, boot loop from DAG persistence
-- Max bounty for High: $15,000
+**High** -- permanent node crash via sandbox escape, block persists in DAG causing boot loop on restart and crash on sync
 
-## 4. Description (Main Report)
+## Fields
 
-Paste the full content of **IMMUNEFI-SUBMISSION-001.md** into the Description field.
+- **Description**: paste `IMMUNEFI-SUBMISSION-001.md`
+- **Proof of Concept**: paste `SUBMISSION-001-POC.md`
+- **Gist**: create from `PoC/test_systemexit_escape.py` with a README
 
-## 5. Proof of Concept
+## Notes
 
-Paste the full content of **SUBMISSION-001-POC.md** into the Proof of Concept field.
-
-## 6. Gist
-
-Create a gist with:
-- `README.md` -- setup instructions and what the tests prove
-- `test_systemexit_escape.py` -- the PoC test file (7 tests, 3 test classes)
-
-## 7. Acknowledgment
-
-Check the box: "I confirm that my submission includes a clear, original explanation and a working PoC."
-
-## 8. Notes
-
-- PoC runs inside hathor-core's own test framework, not standalone mocks
-- Full node integration test uses SimulatorTestCase with mining, consensus, DAG, vertex handler
-- The only mock is crash_and_exit itself (can't let sys.exit(-1) kill the test process)
-- All NC execution goes through real MeteredExecutor, Runner, block executor, vertex handler
-- 7 tests, 3 test classes, all passing
+- PoC runs inside hathor-core's test framework, not standalone mocks
+- Full node integration test uses SimulatorTestCase with real mining, consensus, DAG, vertex handler
+- Only mock is crash_and_exit (can't let sys.exit kill the test process)
+- Test proves block + tx persist in RocksDB and block is marked CONSENSUS_FAIL_ID after crash
