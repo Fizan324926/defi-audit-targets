@@ -13,13 +13,30 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 
 ---
 
-## Active Audits
+## All Audits
 
-| Program | Bounty | Language | Audit Folder | Status |
-|---------|--------|----------|--------------|--------|
-| [Sky (MakerDAO)](https://immunefi.com/bug-bounty/sky/) | $10,000,000 | Solidity / EVM | [`audits/sky/`](audits/sky/README.md) | In Progress |
-| [Orca Whirlpool](https://immunefi.com/bug-bounty/orca/) | $500,000 | Rust / Solana | [`audits/orca-whirlpool/`](audits/orca-whirlpool/README.md) | In Progress |
-| [GMX V2 Synthetics](https://immunefi.com/bug-bounty/gmx/) | $5,000,000 | Solidity / EVM | [`audits/gmx-synthetics/`](audits/gmx-synthetics/README.md) | Complete |
+| Program | Max Bounty | Language | Findings | Audit Folder | Status |
+|---------|-----------|----------|----------|--------------|--------|
+| [Sky (MakerDAO)](https://immunefi.com/bug-bounty/sky/) | $10,000,000 | Solidity | 1 High, 2 Medium | [`audits/sky/`](audits/sky/README.md) | Complete |
+| [GMX V2 Synthetics](https://immunefi.com/bug-bounty/gmx/) | $5,000,000 | Solidity | 2 High | [`audits/gmx-synthetics/`](audits/gmx-synthetics/README.md) | Complete |
+| [Optimism](https://immunefi.com/bug-bounty/optimism/) | $2,000,042 | Solidity + Go | 1 Medium | [`audits/optimism/`](audits/optimism/README.md) | Complete |
+| [Orca Whirlpool](https://immunefi.com/bug-bounty/orca/) | $500,000 | Rust / Solana | 1 Medium (borderline) | [`audits/orca-whirlpool/`](audits/orca-whirlpool/README.md) | Complete |
+
+---
+
+## All Confirmed Findings (Quick Reference)
+
+| # | Program | ID | Severity | Title | Report |
+|---|---------|-----|----------|-------|--------|
+| 1 | Sky | 001 | **HIGH** | `setRewardsDuration` mid-period truncation destroys staker yield | [Report](audits/sky/findings/001-staking-rewards-duration-yield-loss.md) |
+| 2 | Sky | 002 | **MEDIUM** | `kick()` reverts when `farm==address(0)` + `burn<WAD` | [Report](audits/sky/findings/002-splitter-farm-zero-dos.md) |
+| 3 | Sky | 003 | **MEDIUM** | `setRewardsDuration(0)` bricks reward distribution | [Report](audits/sky/findings/003-staking-rewards-zero-duration.md) |
+| 4 | GMX | VULN-003 | **HIGH** | Relay fee swap hardcodes `minOutputAmount=0` (zero slippage) | [Report](audits/gmx-synthetics/exploits/VULN-003-relay-fee-swap-zero-slippage.md) |
+| 5 | GMX | VULN-011 | **HIGH** | Missing sequential nonce — keeper reorders/skips relay txns | [Report](audits/gmx-synthetics/exploits/VULN-011-missing-relay-nonce-validation.md) |
+| 6 | Optimism | M-01 | **MEDIUM** | `SuperFaultDisputeGame.closeGame()` blocks credit claims during pause | [Report](audits/optimism/findings/IMMUNEFI-SUBMISSION-M01.md) |
+| 7 | Orca | H-02 | **MEDIUM** | Protocol fee counter wrapping overflow — silent revenue loss | [Report](audits/orca-whirlpool/findings/H-02-protocol-fee-wrapping-overflow.md) |
+
+**Total: 3 High, 4 Medium across 4 protocols**
 
 ---
 
@@ -58,6 +75,22 @@ One of the largest DeFi protocols ($8B+ TVL). CDP stablecoin (DAI/USDS), savings
 | [001](audits/sky/findings/001-staking-rewards-duration-yield-loss.md) | High | StakingRewards.sol | `setRewardsDuration` mid-period integer truncation destroys staker yield |
 | [002](audits/sky/findings/002-splitter-farm-zero-dos.md) | Medium | Splitter.sol | `kick()` reverts when `farm==address(0)` + `burn<WAD`, DoSing SBE |
 | [003](audits/sky/findings/003-staking-rewards-zero-duration.md) | Medium | StakingRewards.sol | `setRewardsDuration(0)` permanently bricks reward distribution |
+
+---
+
+### Optimism — [`audits/optimism/`](audits/optimism/README.md)
+
+L2 rollup with fault proof system. 162 Solidity files + Go op-node code covering bridges, dispute games, Cannon MIPS64 VM, and superchain interop. Two full audit passes: 120+ vectors investigated.
+
+**Confirmed Findings (1 of 120+):**
+
+| ID | Severity | Contract | Description |
+|----|----------|----------|-------------|
+| [M-01](audits/optimism/findings/IMMUNEFI-SUBMISSION-M01.md) | Medium | SuperFaultDisputeGame.sol | `closeGame()` pause check before early return blocks `claimCredit()` during system pause |
+
+**Immunefi submission:** [`IMMUNEFI-SUBMISSION-M01.md`](audits/optimism/findings/IMMUNEFI-SUBMISSION-M01.md) (copy-paste ready)
+**PoC:** [`PoC_M01_CloseGameOrdering.sol`](audits/optimism/scripts/verify/PoC_M01_CloseGameOrdering.sol) (Foundry test)
+**Full audit report:** [`AUDIT-REPORT.md`](audits/optimism/findings/AUDIT-REPORT.md)
 
 ---
 
