@@ -617,16 +617,19 @@ mod tests {
         println!("\n======================================================================");
         println!("Integration: Full Attack Sequence with Real AAPLx Price");
         println!("======================================================================");
-        println!("\nUsing real mainnet AAPLx price ($264.70) observed on 2026-03-05.\n");
+        println!("\nUsing live mainnet AAPLx price ($263.17) verified on 2026-03-05.\n");
 
-        let aaplx_price = 264.70_f64;
+        // Live verified price from Solana mainnet, March 5 2026
+        // OraclePrices account: 3t4JZcueEzTbVP6kLxXrL3VpWx45jDer4eqysweBchNH
+        // Entry #258, oracle type 37 (ChainlinkX)
+        let aaplx_price = 263.17_f64;
         let aaplx_price_wad = (aaplx_price * WAD as f64) as u128;
         let ltv = 0.35_f64;
 
         println!("=== Attack Vector 1: Stock Split Replay ===\n");
         {
-            let post_split_price_per_unit = aaplx_price / 2.0; // $132.35
-            let pre_split_oracle = aaplx_price; // $264.70
+            let post_split_price_per_unit = aaplx_price / 2.0; // $131.58
+            let pre_split_oracle = aaplx_price; // $263.17
 
             let units = 200_u64;
             let post_split_units = units * 2;
