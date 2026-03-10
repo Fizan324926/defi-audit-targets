@@ -46,19 +46,25 @@ That file is fully self contained with:
 - End to end attack flow
 - On chain evidence table (read only data, no transactions)
 
-## 6. Gist (Optional)
+## 6. Gist
 
-Create a secret GitHub Gist containing two files:
-- `Cargo.toml` — the package manifest
-- `src/lib.rs` — the full PoC source
+Gist is live and ready to paste:
 
-To create from the command line:
-```bash
-gh gist create --desc "Kamino Scope ChainlinkX v10 PoC" \
-  PoC/Cargo.toml PoC/src/lib.rs
+```
+https://gist.github.com/Fizan324926/fad12ecd790c68887a350d1e5ea1b9d9
 ```
 
-Then paste the gist URL into the Immunefi Gist field.
+Contains 3 files:
+- `README.md` — what the PoC proves, how to run, test matrix, target info
+- `Cargo.toml` — package manifest with exact dependencies
+- `lib.rs` — full PoC source (10 tests)
+
+Reviewer can clone and run in 30 seconds:
+```bash
+git clone https://gist.github.com/fad12ecd790c68887a350d1e5ea1b9d9.git kamino-scope-v10-poc
+cd kamino-scope-v10-poc && mkdir -p src && mv lib.rs src/lib.rs
+cargo test -- --nocapture
+```
 
 ## 7. Attachments
 
@@ -77,4 +83,4 @@ Check the box: "I confirm that my submission includes a clear, original explanat
 | Title | Use the title string above |
 | Description | `IMMUNEFI-SUBMISSION-002.md` |
 | Proof of Concept | `SUBMISSION-002-POC.md` |
-| Gist | Create from `PoC/Cargo.toml` + `PoC/src/lib.rs` |
+| Gist | `https://gist.github.com/Fizan324926/fad12ecd790c68887a350d1e5ea1b9d9` |
