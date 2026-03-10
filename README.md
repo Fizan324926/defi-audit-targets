@@ -34,6 +34,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | [Spark (SparkLend)](https://immunefi.com/bug-bounty/spark/) | $5,000,000 | Solidity | 0 (clean audit) | [`audits/spark/`](audits/spark/findings/AUDIT-REPORT.md) | Complete |
 | [Merchant Moe (LFJ)](https://immunefi.com/bug-bounty/merchantmoe/) | $100,000 | Solidity | 0 (clean audit) | [`audits/merchant-moe/`](audits/merchant-moe/findings/AUDIT-REPORT.md) | Complete |
 | [OpenZeppelin](https://immunefi.com/bug-bounty/openzeppelin/) | $500,000 | Solidity | 2 High, 4 Medium | [`audits/openzeppelin/`](audits/openzeppelin/findings/AUDIT-REPORT.md) | Complete |
+| [Flamingo Finance](https://immunefi.com/bug-bounty/flamingo-finance/) | $1,000,000 | C# (Neo N3) | 2 Medium | [`audits/flamingo-finance/`](audits/flamingo-finance/findings/AUDIT-REPORT.md) | Complete |
 
 ---
 
@@ -67,8 +68,10 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 
 | 24 | OpenZeppelin | 001 | **HIGH** | LimitOrderHook withdrawal underflow — permanent fund lock for later withdrawers | [Report](audits/openzeppelin/findings/IMMUNEFI-SUBMISSION-001.md) |
 | 25 | OpenZeppelin | 002 | **HIGH** | VotesConfidential FHE.sub underflow — voting power wrap-around via modular arithmetic | [Report](audits/openzeppelin/findings/IMMUNEFI-SUBMISSION-002.md) |
+| 26 | Flamingo | 001 | **MEDIUM** | ProxySwapTokenInForTokenOut checks LP balance instead of input token — swap DoS | [Report](audits/flamingo-finance/findings/IMMUNEFI-SUBMISSION-001.md) |
+| 27 | Flamingo | 002 | **MEDIUM** | Staking profit rate integer division truncation — permanent reward loss | [Report](audits/flamingo-finance/findings/IMMUNEFI-SUBMISSION-002.md) |
 
-**Total: 6 High, 2 Medium-High, 16 Medium, 1 Low-Medium across 17 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network + Chainlink + Spark + Merchant Moe: clean audits — 0 findings)
+**Total: 6 High, 2 Medium-High, 18 Medium, 1 Low-Medium across 18 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network + Chainlink + Spark + Merchant Moe: clean audits — 0 findings)
 
 ---
 
@@ -435,6 +438,28 @@ Multi-repository audit of OpenZeppelin's Solidity libraries. 4 repositories: ope
 
 **Full audit report:** [`AUDIT-REPORT.md`](audits/openzeppelin/findings/AUDIT-REPORT.md)
 **Immunefi submissions:** [`IMMUNEFI-SUBMISSION-001.md`](audits/openzeppelin/findings/IMMUNEFI-SUBMISSION-001.md), [`IMMUNEFI-SUBMISSION-002.md`](audits/openzeppelin/findings/IMMUNEFI-SUBMISSION-002.md)
+
+### Flamingo Finance — [`audits/flamingo-finance/`](audits/flamingo-finance/findings/AUDIT-REPORT.md)
+
+Uniswap V2-style AMM DEX and staking/reward protocol on the Neo N3 blockchain. C# smart contracts targeting NeoVM. 3 repositories: flamingo-contract-swap (FlamingoSwapFactory, FlamingoSwapPair, FlamingoSwapRouter, ProxyTemplate, FlamingoSwapPairWhiteList), flamingo-contract-staking-n3 (FLM Token, Staking Vault), flamingo-audits (prior audit PDFs for FUSD/OrderBook/Flocks — NOT covering in-scope contracts). ~3,500 LOC across 38 C# contract files. 55+ hypotheses tested.
+
+**Findings (2 Medium, 2 Low, 2 Informational — 2 Immunefi submissions):**
+
+| ID | Severity | Contract | Description |
+|----|----------|----------|-------------|
+| [001](audits/flamingo-finance/findings/IMMUNEFI-SUBMISSION-001.md) | Medium | ProxyTemplateContract.cs | `ProxySwapTokenInForTokenOut` checks LP token balance (Pair01) instead of input token (path[0]) — swap DoS |
+| [002](audits/flamingo-finance/findings/IMMUNEFI-SUBMISSION-002.md) | Medium | Staking.Record.cs | Integer division truncation in profit rate (`shareAmount / totalStaked = 0`) — permanent reward loss, amplified by 10^30 ConvertDecimal |
+| L-01 | Low | Staking.cs | `CheckFLM` public function has unguarded write side effects (storage mutation without reentrancy guard) |
+| L-02 | Low | FlamingoSwapPairContract.Nep17.cs | `OnNEP17Payment` validation commented out — pair accepts any NEP-17 token |
+| I-01 | Informational | FlamingoSwapPairContract.cs | Fund fee (0.05%) truncates to zero for swaps < 2000 base units |
+| I-02 | Informational | FlamingoSwapPairContract.Admin.cs | GASAdmin uninitialized — `ClaimGASFrombNEO` permanently DoS'd |
+
+**Well-defended areas:** Constant product K-invariant (mathematically sound, fee ensures surplus), MINIMUM_LIQUIDITY=1000 (first-depositor protection), EnteredStorage reentrancy guard on Swap/Mint/Burn, whitelist-based router access control, Neo N3 transaction atomicity (full ACID), BigInteger arbitrary precision (no overflow), upgrade timelock (24h delay).
+
+**Prior audit gap:** The `flamingo-audits` repo contains audits for FUSD, OrderBook v2, Flocks, and LP-Staking — but NOT for the core swap (Pair/Router/Factory) or FLM/Staking contracts in the Immunefi scope.
+
+**Full audit report:** [`AUDIT-REPORT.md`](audits/flamingo-finance/findings/AUDIT-REPORT.md)
+**Immunefi submissions:** [`IMMUNEFI-SUBMISSION-001.md`](audits/flamingo-finance/findings/IMMUNEFI-SUBMISSION-001.md), [`IMMUNEFI-SUBMISSION-002.md`](audits/flamingo-finance/findings/IMMUNEFI-SUBMISSION-002.md)
 
 ---
 
