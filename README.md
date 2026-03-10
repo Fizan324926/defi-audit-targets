@@ -39,6 +39,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | [Hathor Network](https://immunefi.com/bug-bounty/hathornetwork/) | $30,000 | Python + JS | 1 Critical, 2 High, 1 Medium | [`audits/hathor-network/`](audits/hathor-network/findings/AUDIT-REPORT.md) | Complete |
 | [Stellar](https://immunefi.com/bug-bounty/stellar/) | $250,000 | Rust + C++ | 0 (clean audit) | [`audits/stellar/`](audits/stellar/findings/AUDIT-REPORT.md) | Complete |
 | [Xterio](https://immunefi.com/bug-bounty/xterio/) | $80,000 | Solidity | 0 (clean audit) | [`audits/xterio/`](audits/xterio/findings/AUDIT-REPORT.md) | Complete |
+| [Filecoin](https://immunefi.com/bug-bounty/filecoin/) | $150,000 | Go + Rust | 0 (clean audit) | [`audits/filecoin/`](audits/filecoin/findings/AUDIT-REPORT.md) | Complete |
 
 ---
 
