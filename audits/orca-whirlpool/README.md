@@ -42,12 +42,12 @@ orca-whirlpool/
 
 ## Findings Summary
 
-| ID | Severity | Title | File | Status |
-|----|----------|-------|------|--------|
-| H-01 | LOW (revised) | Unsafe U32 subtraction in adaptive fee range calc | `fee_rate_manager.rs:62-74` | Invariant maintained — LOW |
-| H-02 | MEDIUM | Protocol fee counter uses `wrapping_add` — silent overflow | `swap_manager.rs:284` | Confirmed |
-| M-01 | MEDIUM | Production `panic!` in migrate instruction | `migrate_repurpose.rs:19` | Confirmed |
-| M-02 | MEDIUM | Extension segment `.expect()` causes permanent pool DoS | `whirlpool.rs:111,116` | Confirmed |
+| ID | Severity | Title | File | Submission Status |
+|----|----------|-------|------|-------------------|
+| H-01 | LOW | Unsafe U32 subtraction in adaptive fee range calc | `fee_rate_manager.rs:62-74` | NON-SUBMITTABLE — invariant maintained + admin-only path |
+| H-02 | MEDIUM | Protocol fee counter uses wrapping arithmetic — silent overflow | `swap_manager.rs:284`, `whirlpool.rs:274,278` | SUBMITTABLE (borderline; very low feasibility) |
+| M-01 | ~~MEDIUM~~ | Production `panic!` in migrate instruction | `migrate_repurpose.rs:19` | OUT OF SCOPE — best practice critique |
+| M-02 | ~~MEDIUM~~ | Extension segment `.expect()` causes permanent pool DoS | `whirlpool.rs:111,116` | FALSE POSITIVE — struct designed as exactly 32 bytes |
 
 ---
 
@@ -105,65 +105,62 @@ The subtraction `max_volatility_accumulator - volatility_reference` at line 63 i
 
 ---
 
-### H-02 (MEDIUM): Protocol Fee Counter Uses `wrapping_add` — Silent Overflow
+### H-02 (MEDIUM): Protocol Fee Counter Uses Wrapping Arithmetic — Two Confirmed Paths
 
-**File:** `swap_manager.rs:284`
-**Code:** `next_protocol_fee = next_protocol_fee.wrapping_add(delta);`
+**Files:**
+- `swap_manager.rs:284` — explicit `wrapping_add` within a single swap
+- `whirlpool.rs:274,278` — plain `+=` across swaps (confirmed wrapping by `Cargo.toml overflow-checks = false`)
 
-The protocol fee owed counter is a balance (not a growth accumulator). Using `wrapping_add` causes it to silently wrap to near-zero when it reaches `u64::MAX`, causing `collect_protocol_fees` to transfer the wrong (near-zero) amount.
+**Build setting:** Workspace `Cargo.toml:14` sets `overflow-checks = false` — all plain `+=` on primitive integers silently wrap in the released BPF binary.
 
-**Contrast:** `fee_growth_global_a/b` intentionally uses wrapping (Uniswap V3 design for growth accumulators). `protocol_fee_owed` is NOT a growth accumulator — it is a balance counter.
+The protocol fee owed counter accumulates fees across swaps. Unlike `fee_growth_global_a/b` (intentionally wrapping Uniswap V3 growth accumulators), `protocol_fee_owed` is a **balance counter** that should be strictly monotone between `collect_protocol_fees` calls. Wrapping to near-zero causes the protocol treasury to receive only the residual after the overflow.
 
-**Impact:** Protocol treasury loses accumulated fees. LP and user funds are unaffected.
+**Two-level overflow:**
+1. Within-swap: `wrapping_add` accumulates per-step fees. Starts at 0 per swap.
+2. Across-swaps: `+=` accumulates per-swap fees into persistent state.
 
-**Feasibility:** Very low for standard tokens (requires years at normal volume), higher for exotic 2-decimal tokens at extreme volume.
+**Impact:** Protocol treasury loses accumulated fee revenue. LP and user funds are unaffected.
 
-**Fix:** Replace with `saturating_add()` or `checked_add()` with error return.
+**Feasibility:** Very low for standard tokens (USDC/SOL require astronomical volume to overflow u64). Somewhat higher for tokens with 0-2 decimal places at sustained high volume.
+
+**Fix:** Replace `wrapping_add` with `saturating_add()` at both accumulation points.
 
 **Verification:** `scripts/verify/verify_H02_protocol_fee_overflow.py`
 **Exploit writeup:** `findings/exploits/H-02-exploit.md`
 
 ---
 
-### M-01 (MEDIUM): Production `panic!` in Migration Instruction
+### M-01 (OUT OF SCOPE): Production `panic!` in Migration Instruction
+
+**Out of scope per Orca Immunefi rules:** "best practice critiques" explicitly excluded.
 
 **File:** `migrate_repurpose_reward_authority_space.rs:19`
-**Code:** `panic!("Whirlpool has been migrated already");`
 
-The migration instruction panics instead of returning a typed `ErrorCode` when called on an already-migrated pool. In Solana BPF, `panic!` aborts with an untyped error — callers cannot distinguish "already migrated" from any other failure.
+The instruction uses `panic!` instead of `return Err(ErrorCode::...)` for the "already migrated" condition. This is a code quality issue with no direct financial impact on users or LPs. Integrators receive an untyped error, but no funds are at risk.
 
-**Additional panics in `fee_rate_manager.rs`:** Lines 626, 709, 789, 866, 946, 2091 — match arm panics that should be `unreachable!()`.
-
-**Impact:** Breaks automation scripts, integrator error handling, monitoring systems.
-
-**Fix:** Return typed `ErrorCode::WhirlpoolAlreadyMigrated` instead of `panic!`.
-
-**Verification:** `scripts/verify/verify_M01_production_panic.py`
-**Exploit writeup:** `findings/exploits/M-01-exploit.md`
+**DO NOT SUBMIT.**
 
 ---
 
-### M-02 (MEDIUM): Extension Segment `.expect()` Causes Permanent Pool DoS
+### M-02 (FALSE POSITIVE): Extension Segment `.expect()` — NOT A VULNERABILITY
 
-**File:** `whirlpool.rs:111,116`
-**Code:**
+**False positive:** Struct is designed to always be exactly 32 bytes.
+
+**File:** `whirlpool.rs:109-117`
+
+The `.expect()` on Borsh deserialization was initially flagged as a schema-evolution DoS risk. However, the struct definitions reveal intentional reserved padding:
+
 ```rust
-WhirlpoolExtensionSegmentPrimary::try_from_slice(&self.reward_infos[1].extension)
-    .expect("Failed to deserialize WhirlpoolExtensionSegmentPrimary")
+pub struct WhirlpoolExtensionSegmentPrimary {
+    pub control_flags: u16,  // 2 bytes
+    pub reserved: [u8; 30],  // 30 bytes — explicit size padding
+}
+// Total: exactly 32 bytes
 ```
 
-The extension segment methods panic on Borsh deserialization failure. Extension data is stored in 32-byte fixed fields. If the `WhirlpoolExtensionSegment` struct grows beyond 32 bytes in a future upgrade (schema evolution), every pool created before the upgrade panics on deserialization — causing permanent DoS on all affected pools.
+Any future field addition would replace reserved bytes, keeping the struct at 32 bytes. The `.expect()` is unreachable for any valid pool state.
 
-**Affected paths:** `is_non_transferable_position_required()` and `is_position_with_token_extensions_required()` — called during position opening/management operations.
-
-**Impact:** Permanent pool DoS (all operations reading extension state fail) until a program upgrade repairs the data.
-
-**Schema evolution risk:** The 32-byte extension fields have no versioning, making future growth of the struct a breaking change for all existing pools.
-
-**Fix:** Return `Result<T>` instead of calling `.expect()`. Add version prefix to extension data.
-
-**Verification:** `scripts/verify/verify_M02_extension_segment_dos.py`
-**Exploit writeup:** `findings/exploits/M-02-exploit.md`
+**DO NOT SUBMIT.**
 
 ---
 
@@ -181,23 +178,40 @@ The extension segment methods panic on Borsh deserialization failure. Extension 
 | `manager/fee_rate_manager.rs` | **H-01 found** (line 63), panic! calls (M-01 adjacent) |
 | `manager/liquidity_manager.rs` | Position fee/reward checkpoint logic — correct |
 | `state/oracle.rs` | AdaptiveFeeVariables, update_reference — invariant maintained |
-| `state/whirlpool.rs` | **M-02 found** (extension segment .expect) |
+| `state/whirlpool.rs` | `update_after_swap` += confirmed wrapping (H-02 Level 2); extension structs verified 32 bytes (M-02 FALSE POSITIVE) |
 | `state/tick.rs` | Tick struct, validation — no issues |
 | `state/position.rs` | Position struct, is_position_empty — correct |
 | `state/adaptive_fee_tier.rs` | Constant validation — thorough |
 | `state/lock_config.rs` | LockConfig, permanent lock only |
-| `instructions/v2/swap.rs` | Oracle UncheckedAccount with seed check — correct |
-| `instructions/v2/two_hop_swap.rs` | Transfer fee handling — vault-to-vault design |
+| `instructions/v2/swap.rs` | Oracle UncheckedAccount with seed check — correct; `swap_with_transfer_fee_extension` handles transfer fees |
+| `instructions/v2/two_hop_swap.rs` | Intermediate transfer fee handled by `calculate_transfer_fee_excluded_amount` — NOT a vulnerability |
+| `instructions/v2/decrease_liquidity.rs` | Lock check present — correct |
+| `instructions/v2/reposition_liquidity_v2.rs` | Accounts struct only (handler in pinocchio) |
+| `instructions/v2/collect_protocol_fees.rs` | Reads `protocol_fee_owed_a/b` directly — confirms H-02 impact |
+| `instructions/v2/collect_fees.rs` | Position `fee_owed_a/b` — correct pattern |
 | `instructions/lock_position.rs` | Position freeze logic — correct |
 | `instructions/transfer_locked_position.rs` | Ownership transfer — correct |
 | `instructions/reset_position_range.rs` | is_position_empty() check — correct |
-| `instructions/decrease_liquidity.rs` | Math-layer bounds check via checked_sub |
-| `instructions/migrate_repurpose_reward_authority_space.rs` | **M-01 found** (panic line 19) |
+| `instructions/decrease_liquidity.rs` | Lock check present; math bounds checked |
+| `instructions/increase_liquidity.rs` | No lock check (by design — deposits allowed) |
+| `instructions/collect_fees.rs` | Reads position fees — correct |
+| `instructions/collect_protocol_fees.rs` | Reads `protocol_fee_owed_a/b`, resets to 0 — confirms H-02 impact |
+| `instructions/update_fees_and_rewards.rs` | Delegates to `calculate_fee_and_reward_growths` — no issues |
+| `instructions/migrate_repurpose_reward_authority_space.rs` | `panic!` at line 19 — OUT OF SCOPE (best practice) |
 | `instructions/adaptive_fee/set_adaptive_fee_constants.rs` | Resets variables — closes H-01 admin path |
 | `instructions/adaptive_fee/set_preset_adaptive_fee_constants.rs` | AdaptiveFeeTier update only |
 | `util/token_2022.rs` | freeze/unfreeze/transfer — standard Token-2022 |
 | `util/sparse_swap.rs` | SparseSwapTickSequenceBuilder — PDA validation in try_build |
 | `pinocchio/ported/manager_liquidity_manager.rs` | Diff vs Anchor impl — **no divergence found** |
+| `pinocchio/ported/util_shared.rs` | `pino_is_locked_position` = `is_frozen()` — correct |
+| `pinocchio/instructions/decrease_liquidity.rs` | Lock check: `pino_is_locked_position` — correct |
+| `pinocchio/instructions/decrease_liquidity_v2.rs` | Lock check: `pino_is_locked_position` — correct |
+| `pinocchio/instructions/increase_liquidity.rs` | No lock check (by design) |
+| `pinocchio/instructions/increase_liquidity_v2.rs` | No lock check (by design) |
+| `pinocchio/instructions/increase_liquidity_by_token_amounts_v2.rs` | No lock check (by design) |
+| `pinocchio/instructions/reposition_liquidity_v2.rs` | Lock check: `pino_is_locked_position` — correct |
+| `pinocchio/state/whirlpool/whirlpool.rs` | Memory-mapped state — no protocol fee accumulation in pinocchio state |
+| `Cargo.toml` (workspace) | `overflow-checks = false` confirmed at line 14 — **strengthens H-02** |
 
 ### Static Analysis Results
 
@@ -206,7 +220,8 @@ Run `python3 scripts/analyze.py`:
 - **424 HIGH patterns**: 361 `.unwrap()`, 55 `.wrapping_*`, 6 `.expect()`, 2 u32 sub
 - **144 MEDIUM patterns**: 95 `UncheckedAccount`, 13 `panic!`, etc.
 - Most `wrapping_*` are intentional (fee growth accumulators follow Uniswap V3 design)
-- Confirmed bugs: `swap_manager.rs:284` (wrapping protocol fee, H-02), `whirlpool.rs:111,116` (.expect M-02)
+- Confirmed bugs: `swap_manager.rs:284` + `whirlpool.rs:274,278` (wrapping protocol fee, H-02)
+- `whirlpool.rs:111,116` (.expect M-02) — FALSE POSITIVE (struct always fits in 32 bytes)
 
 ### Fuzz / Verification Results
 
@@ -236,24 +251,28 @@ The design comment in the code explicitly addresses this: "vault to vault transf
 
 ---
 
-## Remaining Attack Surfaces (Not Yet Fully Explored)
+## Areas Fully Verified (No Vulnerabilities Found)
 
-- `instructions/v2/reposition_liquidity_v2.rs` — position range reposition in one atomic tx
-- `manager/tick_manager.rs` / `manager/whirlpool_manager.rs` — internal state update logic
-- `util/swap_tick_sequence.rs` — legacy tick sequence (vs sparse)
-- Pinocchio instruction implementations in `pinocchio/instructions/`
-- Token-2022 transfer hook integration (if any)
+| Area | Verification Result |
+|------|---------------------|
+| Two-hop swap transfer fees | `swap_with_transfer_fee_extension` internally calls `calculate_transfer_fee_excluded_amount` — NOT a vulnerability |
+| Lock position bypass via `decrease_liquidity` | Both v1+v2 Anchor and all pinocchio handlers check `is_locked_position()` — properly enforced |
+| Lock position bypass via `reposition_liquidity_v2` | Pinocchio and Anchor both check `pino_is_locked_position()` at entry — properly enforced |
+| `increase_liquidity` on locked positions | No lock check by design — locking prevents withdrawal, not deposits |
+| Pinocchio vs Anchor divergence | Full comparison across all instruction handlers — no behavioral divergence found |
+| `swap_math.rs AmountDeltaU64::value()` panic | Guarded by `!exceeds_max()` condition before call — safe |
+| Extension struct schema evolution | `reserved: [u8; 30/32]` ensures struct always fits in 32 bytes — NOT a vulnerability |
+| `fee_growth_global_a/b` wrapping | Intentional Uniswap V3 design — correct |
+| Pinocchio `decrease_liquidity` lock check | Both v1 and v2 check `pino_is_locked_position` — correct |
 
----
-
-## Submission Priority
+## Submission Recommendation
 
 | Priority | Finding | Justification |
 |----------|---------|---------------|
-| 1st | H-02 | Confirmed bug in production, clear code evidence, real (if low-probability) financial impact |
-| 2nd | M-02 | Confirmed `.expect()` calls, systematic risk for future upgrades, schema evolution is a real concern |
-| 3rd | M-01 | Confirmed panic!, clear code evidence, breaks integrator error handling |
-| 4th | H-01 | Low severity — informational — invariant maintained, defensive fix recommended |
+| 1st | **H-02** (borderline) | Only confirmed real code bug. Two wrapping paths confirmed. Impact is protocol treasury only. Very low feasibility for standard tokens. May be rejected as "best practice critique" by Orca. |
+| — | H-01 | Non-submittable: invariant maintained, requires admin key (out of scope) |
+| — | M-01 | Out of scope: explicit "best practice critique" exclusion |
+| — | M-02 | False positive: struct always exactly 32 bytes by design |
 
 ---
 

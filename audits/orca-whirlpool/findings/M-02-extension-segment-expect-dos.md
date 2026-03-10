@@ -1,9 +1,40 @@
-# M-02: Extension Segment `.expect()` Calls Can Cause Permanent Pool DoS
+# M-02: Extension Segment `.expect()` Calls — RETRACTED (FALSE POSITIVE)
 
-**Severity:** Medium
-**File:** `programs/whirlpool/src/state/whirlpool.rs`
-**Lines:** 111, 116 (approx — based on static scan output)
-**Status:** Open — Not yet reported
+**Severity:** ~~Medium~~ — **RETRACTED**
+**File:** `programs/whirlpool/src/state/whirlpool.rs:109-117`
+**Status:** FALSE POSITIVE — struct is designed to always be exactly 32 bytes
+
+---
+
+## Retraction
+
+Initial assessment was incorrect. The structs are designed with explicit reserved padding to always fit exactly in the 32-byte extension field.
+
+```rust
+// whirlpool.rs (near line 396)
+pub struct WhirlpoolExtensionSegmentPrimary {
+    // total length must be 32 bytes
+    pub control_flags: u16,   // 2 bytes
+    pub reserved: [u8; 30],   // 30 bytes (intentional padding)
+}
+
+pub struct WhirlpoolExtensionSegmentSecondary {
+    // total length must be 32 bytes
+    pub reserved: [u8; 32],   // 32 bytes (fully reserved)
+}
+```
+
+The `reserved` fields serve as explicit size padding. Additionally, `to_bytes()` asserts the serialized size is exactly 32 bytes at compile time. `[0u8; 32]` (all zeros) deserializes successfully as both structs:
+- `WhirlpoolExtensionSegmentPrimary { control_flags: 0, reserved: [0; 30] }` ✓
+- `WhirlpoolExtensionSegmentSecondary { reserved: [0; 32] }` ✓
+
+The schema evolution risk is mitigated by the explicit reserved buffer: any future field addition would replace `reserved` bytes, keeping the total at 32 bytes. The `.expect()` is effectively unreachable for any currently valid pool state.
+
+**DO NOT SUBMIT to Immunefi.**
+
+---
+
+## Original Finding (preserved for reference)
 
 ---
 

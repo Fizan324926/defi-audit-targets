@@ -1,9 +1,25 @@
-# M-01: Production `panic!` in Migration Instruction Causes DoS
+# M-01: Production `panic!` in Migration Instruction — OUT OF SCOPE
 
-**Severity:** Medium
-**File:** `programs/whirlpool/src/instructions/migrate_repurpose_reward_authority_space.rs`
-**Line:** 19
-**Status:** Open — Not yet reported
+**Severity:** ~~Medium~~ — **OUT OF SCOPE for Immunefi**
+**File:** `programs/whirlpool/src/instructions/migrate_repurpose_reward_authority_space.rs:19`
+**Status:** OUT OF SCOPE — Orca's Immunefi rules explicitly exclude "best practice critiques"
+
+---
+
+## Scope Ruling
+
+Orca's Immunefi bug bounty program uses **Primacy of Rules** and explicitly lists "best practice critiques or suggestions" as out of scope. Using `panic!` instead of `return Err(ErrorCode::...)` is a code quality/best practice issue with no direct exploitable financial impact:
+
+- No user funds at risk
+- No LP funds at risk
+- Migration is a one-time admin operation
+- The only consequence is integrators receiving an untyped error instead of a typed one
+
+**DO NOT SUBMIT to Immunefi.**
+
+---
+
+## Original Finding (preserved for reference)
 
 ---
 

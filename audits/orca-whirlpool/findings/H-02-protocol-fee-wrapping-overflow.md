@@ -1,9 +1,11 @@
-# H-02: Protocol Fee Counter Uses `wrapping_add` — Silent Overflow Loses Protocol Revenue
+# H-02: Protocol Fee Counter Uses Wrapping Arithmetic — Silent Overflow Loses Protocol Revenue
 
-**Severity:** Medium (theoretical High, but requires astronomical trading volume)
-**File:** `programs/whirlpool/src/manager/swap_manager.rs`
-**Line:** 284
-**Status:** Open — Not yet reported
+**Severity:** Medium (real confirmed bug; practical feasibility is very low for standard tokens)
+**Files:**
+- `programs/whirlpool/src/manager/swap_manager.rs:284` — explicit `wrapping_add` within a swap
+- `programs/whirlpool/src/state/whirlpool.rs:274,278` — plain `+=` across swaps
+**Build:** `overflow-checks = false` in workspace `Cargo.toml:14` — all plain `+=` silently wrap
+**Status:** Confirmed code bug — borderline submittable to Immunefi
 
 ---
 
@@ -20,26 +22,53 @@ next_protocol_fee = next_protocol_fee.wrapping_add(delta);
 
 ---
 
-## Context: How Protocol Fees Accumulate
+## Context: Two-Level Wrapping in the Protocol Fee Path
+
+### Level 1: Within-swap accumulation (swap_manager.rs:284)
+
+`calculate_fees()` is called once per step inside the swap loop. It accumulates `curr_protocol_fee` starting from `0` for each swap:
 
 ```rust
-// swap_manager.rs — full context
-fn calculate_protocol_fee(global_fee: u64, protocol_fee_rate: u16) -> u64 {
-    ((global_fee as u128) * (protocol_fee_rate as u128)
-        / PROTOCOL_FEE_RATE_MUL_VALUE as u128)
-        .try_into()
-        .unwrap()  // ← separate potential panic, but bounded by fee_rate constraint
-}
+// swap_manager.rs:73 — starts at zero for each swap
+let mut curr_protocol_fee: u64 = 0;
 
-// Line 280-284
-let delta = calculate_protocol_fee(fee_amount, whirlpool.protocol_fee_rate);
-match a_to_b {
-    true  => next_protocol_fee_a = next_protocol_fee_a.wrapping_add(delta),
-    false => next_protocol_fee_b = next_protocol_fee_b.wrapping_add(delta),
+// swap_manager.rs:284 — explicit wrapping add per step
+next_protocol_fee = next_protocol_fee.wrapping_add(delta);
+```
+
+The final `curr_protocol_fee` (the sum of all per-step fees for one swap) is returned as `PostSwapUpdate.next_protocol_fee`.
+
+### Level 2: Across-swap accumulation (whirlpool.rs:274,278)
+
+After each swap, `update_after_swap` adds the swap's protocol fee to the persistent counter:
+
+```rust
+// whirlpool.rs:271-279 — plain += across multiple swaps
+if is_token_fee_in_a {
+    self.fee_growth_global_a = fee_growth_global;
+    self.protocol_fee_owed_a += protocol_fee;  // ← LINE 274: plain += wraps silently
+} else {
+    self.fee_growth_global_b = fee_growth_global;
+    self.protocol_fee_owed_b += protocol_fee;  // ← LINE 278: plain += wraps silently
 }
 ```
 
-When `collect_protocol_fees` is called, the `protocol_fee_owed_a/b` values are transferred to the fee authority and reset to zero. If overflow occurs BETWEEN two `collect_protocol_fees` calls, the transferred amount will be much smaller than what was actually earned.
+**Confirmed wrapping:** `Cargo.toml` (workspace root, line 14):
+```toml
+[profile.release]
+overflow-checks = false
+```
+
+With `overflow-checks = false`, plain `+=` on `u64` wraps silently in the released BPF binary — identical behavior to `wrapping_add`.
+
+### Summary
+
+| Level | Location | Wrapping mechanism |
+|-------|----------|--------------------|
+| Within-swap | `swap_manager.rs:284` | Explicit `wrapping_add` |
+| Across-swaps | `whirlpool.rs:274,278` | Plain `+=` + `overflow-checks = false` |
+
+When `collect_protocol_fees` is called, `protocol_fee_owed_a/b` are transferred and reset to zero. If the counter wraps before collection, the protocol receives a fraction of the actual accumulated fees.
 
 ---
 
