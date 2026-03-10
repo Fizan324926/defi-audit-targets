@@ -32,6 +32,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | [Origin Protocol](https://immunefi.com/bug-bounty/originprotocol/) | $1,000,000 | Solidity | 2 Medium (Immunefi) | [`audits/origin-protocol/`](audits/origin-protocol/findings/CONSOLIDATED-AUDIT-REPORT.md) | Complete |
 | [Yearn Finance](https://immunefi.com/bug-bounty/yearnfinance/) | $200,000 | Solidity + Vyper | 5 Medium | [`audits/yearn-finance/`](audits/yearn-finance/findings/CONSOLIDATED-AUDIT-REPORT.md) | Complete |
 | [Spark (SparkLend)](https://immunefi.com/bug-bounty/spark/) | $5,000,000 | Solidity | 0 (clean audit) | [`audits/spark/`](audits/spark/findings/AUDIT-REPORT.md) | Complete |
+| [Merchant Moe (LFJ)](https://immunefi.com/bug-bounty/merchantmoe/) | $100,000 | Solidity | 0 (clean audit) | [`audits/merchant-moe/`](audits/merchant-moe/findings/AUDIT-REPORT.md) | Complete |
 
 ---
 
@@ -65,7 +66,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | 22 | Yearn | 004 | **MEDIUM** | Zap.sol zero slippage on intermediate Curve pool operations — MEV | [Report](audits/yearn-finance/findings/IMMUNEFI-SUBMISSION-004.md) |
 | 23 | Yearn | 005 | **MEDIUM** | StakingRewardDistributor division by zero when total_weight is zero | [Report](audits/yearn-finance/findings/IMMUNEFI-SUBMISSION-005.md) |
 
-**Total: 4 High, 2 Medium-High, 16 Medium, 1 Low-Medium across 15 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network + Chainlink + Spark: clean audits — 0 findings)
+**Total: 4 High, 2 Medium-High, 16 Medium, 1 Low-Medium across 16 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network + Chainlink + Spark + Merchant Moe: clean audits — 0 findings)
 
 ---
 
@@ -384,6 +385,30 @@ The protocol demonstrates exceptional defense-in-depth: chi-based ERC4626 accoun
 | MainnetController | Low | Maple cancel doesn't restore rate limit (by design) |
 
 **Full audit report:** [`AUDIT-REPORT.md`](audits/spark/findings/AUDIT-REPORT.md)
+
+---
+
+### Merchant Moe (LFJ) — [`audits/merchant-moe/`](audits/merchant-moe/findings/AUDIT-REPORT.md)
+
+Cornerstone DEX for Mantle Network by the Trader Joe (LFJ) team. Dual-AMM architecture: classic AMM (UniV2 fork with non-standard token-extraction fee in MoePair) + Liquidity Book concentrated liquidity (discrete price bins, 128.128 binary fixed-point pricing, 3-level TreeMath O(log64) bin traversal). 4 repositories: moe-core (classic AMM, MasterChef, VeMoe, StableMoe, rewarders), joe-v2 (LB pairs, factory, router, hooks, math libraries), lb-rewarder (hooks-based reward distribution, MCRewarder ERC20 wrapper), autopools (vault-strategy separation, dead-share protection, 1inch swap integration). ~21,268 LOC across 119 Solidity files. Prior audits by Paladin (March 2024) and Bailsec (November 2024). 53 hypotheses tested.
+
+**Result: Clean audit — 0 exploitable vulnerabilities found across 53 hypotheses.**
+
+The protocol demonstrates strong security engineering: dual-precision rewarder system (V1 64-bit for legacy, V2 128-bit for new contracts) with correct accDebtPerShare mechanics, comprehensive hooks architecture in LB v2.1 with proper reentrancy considerations (after-hooks execute outside guard but CEI ensures consistent state), dead-share (1e6) first-depositor protection in autopools, balance-derived reward distribution in StableMoe with zero-supply guards, PackedUint128Math dual overflow checks, consistent rounding discipline (RoundDown for outputs, RoundUp for inputs/fees), and emergency escape hatches bypassing external calls.
+
+**Informational observations only:**
+
+| Area | Severity | Description |
+|------|----------|-------------|
+| MoeStaking | Informational | No reentrancy guard despite sequential external calls (safe due to CEI pattern) |
+| Rewarder V1 | Informational | 64-bit precision vs V2 128-bit (negligible ~54 wei loss per update) |
+| MoePair._sendFee() | Informational | Non-standard token extraction instead of LP minting (mathematically equivalent) |
+| LBToken | Informational | No ERC1155 safe transfer callbacks (documented, prevents reentrancy) |
+| LBPair hooks | Informational | After-hooks outside reentrancy guard (safe, all state finalized) |
+| Strategy operator | Informational | Unrestricted 1inch swap control (trusted role by design) |
+| VeMoe cap | Informational | Uses oldBalance for cap (conservative delay, not exploitable) |
+
+**Full audit report:** [`AUDIT-REPORT.md`](audits/merchant-moe/findings/AUDIT-REPORT.md)
 
 ---
 
