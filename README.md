@@ -20,6 +20,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | [Sky (MakerDAO)](https://immunefi.com/bug-bounty/sky/) | $10,000,000 | Solidity | 1 High, 2 Medium | [`audits/sky/`](audits/sky/README.md) | Complete |
 | [GMX V2 Synthetics](https://immunefi.com/bug-bounty/gmx/) | $5,000,000 | Solidity | 2 High | [`audits/gmx-synthetics/`](audits/gmx-synthetics/README.md) | Complete |
 | [Optimism](https://immunefi.com/bug-bounty/optimism/) | $2,000,042 | Solidity + Go | 1 Medium | [`audits/optimism/`](audits/optimism/README.md) | Complete |
+| [Olympus DAO](https://immunefi.com/bug-bounty/olympus/) | $3,333,333 | Solidity | 1 Medium-High, 5 Medium | [`audits/olympus-dao/`](audits/olympus-dao/bophades/findings/AUDIT-REPORT.md) | Complete |
 | [Orca Whirlpool](https://immunefi.com/bug-bounty/orca/) | $500,000 | Rust / Solana | 1 Medium (borderline) | [`audits/orca-whirlpool/`](audits/orca-whirlpool/README.md) | Complete |
 
 ---
@@ -35,8 +36,14 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | 5 | GMX | VULN-011 | **HIGH** | Missing sequential nonce — keeper reorders/skips relay txns | [Report](audits/gmx-synthetics/exploits/VULN-011-missing-relay-nonce-validation.md) |
 | 6 | Optimism | M-01 | **MEDIUM** | `SuperFaultDisputeGame.closeGame()` blocks credit claims during pause | [Report](audits/optimism/findings/IMMUNEFI-SUBMISSION-M01.md) |
 | 7 | Orca | H-02 | **MEDIUM** | Protocol fee counter wrapping overflow — silent revenue loss | [Report](audits/orca-whirlpool/findings/H-02-protocol-fee-wrapping-overflow.md) |
+| 8 | Olympus | 011 | **MED-HIGH** | CCIP Bridge missing ERC20 rescue — OHM permanently stuck | [Report](audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-011.md) |
+| 9 | Olympus | 012 | **MEDIUM** | LZ Bridge incomplete shutdown — `bridgeActive` doesn't block mints | [Report](audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-012.md) |
+| 10 | Olympus | 005 | **MEDIUM** | Clearinghouse `rebalance()` fund-time accumulation | [Report](audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-005.md) |
+| 11 | Olympus | 008 | **MEDIUM** | Stale price oracle wall swap arbitrage (24h window) | [Report](audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-008.md) |
+| 12 | Olympus | 010 | **MEDIUM** | Heart beat front-running via predictable price updates | [Report](audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-010.md) |
+| 13 | Olympus | 001 | **MEDIUM** | YieldRepo hardcoded `backingPerToken` ($11.33) | [Report](audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-001.md) |
 
-**Total: 3 High, 4 Medium across 4 protocols**
+**Total: 3 High, 1 Medium-High, 9 Medium across 5 protocols**
 
 ---
 
@@ -92,6 +99,31 @@ L2 rollup with fault proof system. 162 Solidity files + Go op-node code covering
 **Immunefi submission:** [`IMMUNEFI-SUBMISSION-M01.md`](audits/optimism/findings/IMMUNEFI-SUBMISSION-M01.md) (copy-paste ready)
 **PoC:** [`PoC_M01_CloseGameOrdering.sol`](audits/optimism/scripts/verify/PoC_M01_CloseGameOrdering.sol) (Foundry test)
 **Full audit report:** [`AUDIT-REPORT.md`](audits/optimism/findings/AUDIT-REPORT.md)
+
+---
+
+### Olympus DAO (Bophades) — [`audits/olympus-dao/`](audits/olympus-dao/bophades/findings/AUDIT-REPORT.md)
+
+Kernel-Module-Policy architecture DeFi protocol. OHM token with Range Bound Stability, MonoCooler lending, cross-chain bridges (LayerZero + Chainlink CCIP), yield repurchase, emission management. 50+ contracts, 15,000+ LOC.
+
+**Findings (13 total — 6 Immunefi-submittable):**
+
+| ID | Severity | Contract | Description |
+|----|----------|----------|-------------|
+| [011](audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-011.md) | Medium-High | CCIPCrossChainBridge | `withdraw()` only rescues ETH — OHM permanently stuck after failed messages |
+| [012](audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-012.md) | Medium | CrossChainBridge | `bridgeActive` not checked on receive — incomplete emergency shutdown |
+| [005](audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-005.md) | Medium | Clearinghouse | `rebalance()` fund-time accumulation — borrow 54M+ in one block |
+| [008](audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-008.md) | Medium | Operator | Stale price oracle enables wall swap arbitrage within 24h window |
+| [010](audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-010.md) | Medium | Heart/PRICE | Predictable MA updates enable heart beat front-running |
+| [001](audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-001.md) | Medium | YieldRepurchaseFacility | Hardcoded `backingPerToken` ($11.33) diverges from actual backing |
+
+**Additional low-severity findings:** EmissionManager precision loss, Kernel migration stale state, DLGTE OZ internals, Clearinghouse keeper reward accounting, Operator regenerate desync, fullCapacity over-estimation, ConvertibleDepositAuctioneer tick decay.
+
+**Notable safe areas:** MonoCooler (0 findings — exceptionally well-engineered), CoolerLtvOracle, SafeCast, FullMath.
+
+**Full audit report:** [`AUDIT-REPORT.md`](audits/olympus-dao/bophades/findings/AUDIT-REPORT.md)
+**Immunefi submissions:** `audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-001.md` through `013.md`
+**PoC files:** `audits/olympus-dao/bophades/scripts/verify/`
 
 ---
 
