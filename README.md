@@ -31,6 +31,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | [Chainlink](https://immunefi.com/bug-bounty/chainlink/) | $3,000,000 | Solidity + Rust + Go | 0 (clean audit) | [`audits/chainlink/`](audits/chainlink/findings/AUDIT-REPORT.md) | Complete |
 | [Origin Protocol](https://immunefi.com/bug-bounty/originprotocol/) | $1,000,000 | Solidity | 2 Medium (Immunefi) | [`audits/origin-protocol/`](audits/origin-protocol/findings/CONSOLIDATED-AUDIT-REPORT.md) | Complete |
 | [Yearn Finance](https://immunefi.com/bug-bounty/yearnfinance/) | $200,000 | Solidity + Vyper | 5 Medium | [`audits/yearn-finance/`](audits/yearn-finance/findings/CONSOLIDATED-AUDIT-REPORT.md) | Complete |
+| [Spark (SparkLend)](https://immunefi.com/bug-bounty/spark/) | $5,000,000 | Solidity | 0 (clean audit) | [`audits/spark/`](audits/spark/findings/AUDIT-REPORT.md) | Complete |
 
 ---
 
@@ -64,7 +65,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | 22 | Yearn | 004 | **MEDIUM** | Zap.sol zero slippage on intermediate Curve pool operations — MEV | [Report](audits/yearn-finance/findings/IMMUNEFI-SUBMISSION-004.md) |
 | 23 | Yearn | 005 | **MEDIUM** | StakingRewardDistributor division by zero when total_weight is zero | [Report](audits/yearn-finance/findings/IMMUNEFI-SUBMISSION-005.md) |
 
-**Total: 4 High, 2 Medium-High, 16 Medium, 1 Low-Medium across 14 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network + Chainlink: clean audits — 0 findings)
+**Total: 4 High, 2 Medium-High, 16 Medium, 1 Low-Medium across 15 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network + Chainlink + Spark: clean audits — 0 findings)
 
 ---
 
@@ -361,6 +362,28 @@ Full-stack DeFi yield protocol. 8 repositories: V3 Vault (VaultV3.vy, Vyper 0.3.
 **Sub-reports:** [`VaultV3 Deep Analysis`](audits/yearn-finance/findings/VAULTV3-AUDIT-REPORT.md) | [`Vyper 0.3.7 Compiler`](audits/yearn-finance/findings/VYPER-0.3.7-COMPILER-BUGS.md) | [`Per-Repo Report`](audits/yearn-finance/findings/AUDIT-REPORT.md)
 **Immunefi submissions:** `IMMUNEFI-SUBMISSION-001.md` through `005.md`
 **PoC files:** [`scripts/verify/`](audits/yearn-finance/scripts/verify/)
+
+### Spark Protocol (SparkLend) — [`audits/spark/`](audits/spark/findings/AUDIT-REPORT.md)
+
+Comprehensive DeFi lending and asset management protocol. 11 repositories: SparkLend V1 Core (Aave V3 fork with BridgeLogic), ALM Controller system (ALMProxy + MainnetController + ForeignController + RateLimits + 10 libraries), PSM3 (L2 peg stability module for USDC/USDS/sUSDS), SparkVault (ERC4626 with MakerDAO-style chi/rho/vsr rate accumulator), 13 oracles + 3 rate strategies, SparkLend Conduit, SparkRewards, governance executor, user actions, automations, and address registry. ~29,315 LOC across Solidity.
+
+**Result: Clean audit — 0 exploitable vulnerabilities found across 60+ hypotheses.**
+
+The protocol demonstrates exceptional defense-in-depth: chi-based ERC4626 accounting (SparkVault) eliminates inflation/donation/flash-loan attack classes entirely, dual-layer access control (RELAYER + rate limits) on all ALM operations, share-based PSM with seed deposit mitigating first-depositor inflation, cumulative merkle claims preventing double-claim, CappedFallbackRateSource wrapper with OOG protection, bidirectional rate limits for PSM swaps, and FREEZER role for emergency revocation.
+
+**Low/Informational observations only:**
+
+| Area | Severity | Description |
+|------|----------|-------------|
+| CappedOracle | Informational | Negative prices pass through uncapped (by design — AaveOracle validates downstream) |
+| EZETHExchangeRateOracle | Informational | Theoretical div-by-zero if totalSupply=0 (unreachable in practice) |
+| MorphoUpgradableOracle | Informational | Returns stale metadata (by design for Morpho Blue) |
+| RateLimits | Informational | Theoretical overflow with extreme admin slope values |
+| SparkLendConduit | Informational | ≤1 wei precision loss per operation (conservative rounding) |
+| SparkVault | Low | Deposit cap bypassable with ERC777 (asset is always standard ERC20) |
+| MainnetController | Low | Maple cancel doesn't restore rate limit (by design) |
+
+**Full audit report:** [`AUDIT-REPORT.md`](audits/spark/findings/AUDIT-REPORT.md)
 
 ---
 
