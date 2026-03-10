@@ -63,16 +63,28 @@ These rules override everything else. No exceptions.
 
 ## 2. Phase 1 — Scope Determination
 
-### 2.1 Read the Immunefi Bounty Page
+### 2.1 Read the Program Entry from `all_programs.txt`
 
-For every new target:
-1. Fetch the Immunefi bounty page for the program.
-2. Record **in-scope assets** (contracts, programs, repos, chains).
-3. Record **out-of-scope assets** (test files, admin multisig, third-party protocols).
-4. Record **out-of-scope vulnerability types** (best practice, centralization risk, etc.).
-5. Record **reward tiers** (Critical / High / Medium / Low caps and floor amounts).
-6. Note whether the program uses **Primacy of Rules** or **Primacy of Impact**.
-7. Note any **additional rules** (KYC, disclosure timeline, PoC requirements).
+All bounty program data is already scraped and stored locally in [`all_programs.txt`](all_programs.txt). **Do not fetch the live Immunefi page** — read from the local file.
+
+To locate a target, search by SLUG:
+```bash
+grep -A 100 "^SLUG: <target-slug>$" all_programs.txt
+```
+
+For every new target, extract and record:
+
+| Field | Location in file | What to capture |
+|-------|-----------------|-----------------|
+| Primacy | `PRIMACY:` line | `Primacy Of Rules` vs `Primacy Of Impact` — determines whether only listed impacts qualify |
+| Max bounty | `MAX BOUNTY:` line | Upper cap for Critical |
+| Rewards by severity | `REWARDS BY SEVERITY:` block | USD amounts for Critical / High / Medium / Low |
+| KYC required | `KYC REQUIRED:` line | Yes / No |
+| PoC required | `TAGS:` → `PoC Required` | Whether a working PoC is mandatory |
+| In-scope assets | `IN-SCOPE ASSETS:` block | Every contract/program address and asset type |
+| Out-of-scope assets | `OUT OF SCOPE:` block | Excluded contracts, files, third-party protocols |
+| Out-of-scope vuln types | `OUT OF SCOPE VULNERABILITIES:` block | Excluded categories (e.g., "best practice critiques") |
+| Ecosystem / Language | `TAGS:` block | Solana/EVM, Rust/Solidity — determines audit toolchain |
 
 ### 2.2 Identify On-Chain Deployments
 
