@@ -36,11 +36,9 @@ Paste the full content of **SUBMISSION-001-POC.md** into the Proof of Concept fi
 
 ## 6. Gist
 
-Create and paste gist URL:
-```bash
-cd audits/hathor-network/PoC/
-gh gist create --desc "Hathor NC SystemExit Sandbox Escape PoC (6 tests, all pass)" \
-  poc_systemexit_sandbox_escape.py
+Gist URL (created):
+```
+https://gist.github.com/Fizan324926/1612b60f1496f12b08eea36135d25b8a
 ```
 
 ## 7. Acknowledgment
