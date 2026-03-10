@@ -29,6 +29,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | [Gains Network](https://immunefi.com/bug-bounty/gains-network/) | $200,000 | Solidity | 0 (clean audit) | [`audits/gains-network/`](audits/gains-network/findings/AUDIT-REPORT.md) | Complete |
 | [Kamino Finance](https://immunefi.com/bug-bounty/kamino/) | $100,000 | Rust / Solana | 1 High, 2 Low-Medium, 2 Low | [`audits/kamino/`](audits/kamino/findings/AUDIT-REPORT.md) | Complete |
 | [Chainlink](https://immunefi.com/bug-bounty/chainlink/) | $3,000,000 | Solidity + Rust + Go | 0 (clean audit) | [`audits/chainlink/`](audits/chainlink/findings/AUDIT-REPORT.md) | Complete |
+| [Origin Protocol](https://immunefi.com/bug-bounty/originprotocol/) | $1,000,000 | Solidity | 2 Medium (Immunefi) | [`audits/origin-protocol/`](audits/origin-protocol/findings/CONSOLIDATED-AUDIT-REPORT.md) | Complete |
 
 ---
 
@@ -54,7 +55,10 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | 15 | Kamino | 002 | **HIGH** | Permissionless crank exploits missing multiplier validation to corrupt xStocks prices | [Report](audits/kamino/findings/IMMUNEFI-SUBMISSION-002.md) |
 | 16 | Kamino | 001 | **LOW-MED** | ChainlinkX v10 ignores `tokenized_price` — manual `price * multiplier` may diverge | [Report](audits/kamino/findings/IMMUNEFI-SUBMISSION-001.md) |
 
-**Total: 4 High, 2 Medium-High, 9 Medium, 1 Low-Medium across 12 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network + Chainlink: clean audits — 0 findings)
+| 17 | Origin | 001 | **MEDIUM** | OETHPlumeVault `_mint` override dead code — access control bypass | [Report](audits/origin-protocol/findings/IMMUNEFI-SUBMISSION-001.md) |
+| 18 | Origin | 002 | **MEDIUM** | OETHOracleRouter unsafe int256→uint256 cast (missing SafeCast) | [Report](audits/origin-protocol/findings/IMMUNEFI-SUBMISSION-002.md) |
+
+**Total: 4 High, 2 Medium-High, 11 Medium, 1 Low-Medium across 13 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network + Chainlink: clean audits — 0 findings)
 
 ---
 
@@ -307,6 +311,27 @@ The protocol demonstrates exceptional defense-in-depth: multi-layer verification
 
 **Full audit report:** [`AUDIT-REPORT.md`](audits/chainlink/findings/AUDIT-REPORT.md)
 **Architecture notes:** [`architecture.md`](audits/chainlink/notes/architecture.md)
+
+---
+
+### Origin Protocol — [`audits/origin-protocol/`](audits/origin-protocol/findings/CONSOLIDATED-AUDIT-REPORT.md)
+
+Multichain yield engine with rebasing tokens (OUSD, OETH, superOETHb, OS) backed by strategies. Three repositories: origin-dollar (vault/token/strategies/oracle/automation), arm-oeth (Automated Redemption Manager AMM), ousd-governance (xOGN staking). Deployed on Ethereum, Base, and Sonic. ~27,800 LOC across 100+ Solidity contracts. 140+ hypotheses tested.
+
+**Findings (3 Medium, 12 Low, 16 Informational — 2 Immunefi-submittable):**
+
+| ID | Severity | Contract | Description |
+|----|----------|----------|-------------|
+| [001](audits/origin-protocol/findings/IMMUNEFI-SUBMISSION-001.md) | Medium | OETHPlumeVault | `_mint(address,uint256,uint256)` dead code — access control bypass via function signature mismatch |
+| [002](audits/origin-protocol/findings/IMMUNEFI-SUBMISSION-002.md) | Medium | OETHOracleRouter | Unsafe `uint256(_iprice)` cast — negative Chainlink price wraps to `type(uint256).max` |
+| 003 | Medium | PlumeBridgeHelperModule | Missing `require(success)` on approve exec call |
+
+**Well-defended areas:** WOETH adjuster mechanism (immune to donation attacks), triple-capped yield drip, ARM dead shares + cross-price bounds, cross-chain CCTP nonce system, AMO solvency thresholds, beacon chain proof verification, xOGN non-transferable + checkpoint voting.
+
+**Full consolidated report:** [`CONSOLIDATED-AUDIT-REPORT.md`](audits/origin-protocol/findings/CONSOLIDATED-AUDIT-REPORT.md)
+**Sub-reports:** [`Strategy`](audits/origin-protocol/findings/AUDIT-REPORT.md) | [`Vault/Token`](audits/origin-protocol/findings/VAULT-TOKEN-AUDIT-REPORT.md) | [`Oracle/Zapper/Bridge`](audits/origin-protocol/findings/AUDIT-REPORT-ORACLE-ZAPPER-BRIDGE.md) | [`ARM/Governance`](audits/origin-protocol/findings/AUDIT-REPORT-ARM-GOVERNANCE.md)
+**Immunefi submissions:** [`IMMUNEFI-SUBMISSION-001.md`](audits/origin-protocol/findings/IMMUNEFI-SUBMISSION-001.md), [`IMMUNEFI-SUBMISSION-002.md`](audits/origin-protocol/findings/IMMUNEFI-SUBMISSION-002.md)
+**PoC files:** [`scripts/verify/`](audits/origin-protocol/scripts/verify/)
 
 ---
 
