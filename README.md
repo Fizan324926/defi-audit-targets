@@ -26,6 +26,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | [Beanstalk](https://immunefi.com/bug-bounty/beanstalk/) | $1,100,000 | Solidity | 1 Medium-High | [`audits/beanstalk/`](audits/beanstalk/findings/AUDIT-REPORT.md) | Complete |
 | [Gearbox V3](https://immunefi.com/bug-bounty/gearbox/) | $200,000 | Solidity | 0 (clean audit) | [`audits/gearbox/`](audits/gearbox/AUDIT-REPORT.md) | Complete |
 | [Reserve Protocol](https://immunefi.com/bug-bounty/reserve/) | $500,000 | Solidity | 0 (clean audit) | [`audits/reserve-protocol/`](audits/reserve-protocol/findings/AUDIT-REPORT.md) | Complete |
+| [Gains Network](https://immunefi.com/bug-bounty/gains-network/) | $200,000 | Solidity | 0 (clean audit) | [`audits/gains-network/`](audits/gains-network/findings/AUDIT-REPORT.md) | Complete |
 
 ---
 
@@ -48,7 +49,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | 13 | Olympus | 001 | **MEDIUM** | YieldRepo hardcoded `backingPerToken` ($11.33) | [Report](audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-001.md) |
 | 14 | Beanstalk | 001 | **MED-HIGH** | SOP/Flood zero-slippage swap + manipulable spot deltaB | [Report](audits/beanstalk/findings/IMMUNEFI-SUBMISSION-001.md) |
 
-**Total: 3 High, 2 Medium-High, 9 Medium across 9 protocols** (LayerZero + Gearbox V3 + Reserve Protocol: clean audits — 0 findings)
+**Total: 3 High, 2 Medium-High, 9 Medium across 10 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network: clean audits — 0 findings)
 
 ---
 
@@ -230,6 +231,27 @@ The protocol demonstrates exceptional defense-in-depth: global reentrancy guard 
 | FolioLib fees | Informational | First fee period undercharges by up to ~24 hours (non-exploitable) |
 
 **Full audit report:** [`AUDIT-REPORT.md`](audits/reserve-protocol/findings/AUDIT-REPORT.md)
+
+---
+
+### Gains Network (gTrade) — [`audits/gains-network/`](audits/gains-network/findings/AUDIT-REPORT.md)
+
+Leveraged perpetual trading platform on Arbitrum + Polygon. EIP-2535 Diamond proxy (GNSMultiCollatDiamond) with 15 facets, GToken ERC4626 vaults (gDAI, gUSDC, gETH) as trade counterparty, velocity-based funding fees, depth-band price impact, multi-reward staking, LayerZero bridge, and Chainlink oracle PnL feed. 12,000+ LOC across core trading, fee, and peripheral systems.
+
+**Result: Clean audit — 0 exploitable vulnerabilities found across 50+ hypotheses.**
+
+The protocol demonstrates strong defense-in-depth: global diamond reentrancy guard, Solidity 0.8.23 overflow protection, SafeERC20 universally, OpenZeppelin Math.mulDiv for rounding control, bounded PnL (-100% floor), anti-trade-splitting price impact (mathematically sound), protection close factor blocking same-block profits, epoch-based vault withdrawals, outlier-filtered median oracle, and consistent multi-collateral precision handling.
+
+**Low/Informational observations only:**
+
+| Area | Severity | Description |
+|------|----------|-------------|
+| PriceAggregatorUtils | Low | Chainlink `latestRoundData()` missing staleness/negative price check (defense-in-depth) |
+| FundingFeesUtils | Low | Sign-change + cap interaction undercharges ~50% for one sub-period (rare edge case) |
+| ERC20BridgeRateLimiter | Low | `executePendingClaim` zero-mint advances claim timestamp (griefing, no fund loss) |
+| GNSStaking | Low | `debtToken` advanced on zero-amount harvest (sub-penny precision loss) |
+
+**Full audit report:** [`AUDIT-REPORT.md`](audits/gains-network/findings/AUDIT-REPORT.md)
 
 ---
 

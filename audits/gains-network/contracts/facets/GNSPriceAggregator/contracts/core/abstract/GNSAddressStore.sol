@@ -1,0 +1,130 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.23;
+
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+
+import "../../interfaces/IGNSAddressStore.sol";
+
+/**
+ * @dev Proxy base for the diamond and its facet contracts to store addresses and manage access control
+ */
+abstract contract GNSAddressStore is Initializable, IGNSAddressStore {
+    AddressStore private addressStore;
+
+    /// @inheritdoc IGNSAddressStore
+    function initialize(address _govTimelock) external initializer {
+        if (_govTimelock == address(0)) {
+            revert IGeneralErrors.InitError();
+        }
+
+        _setRole(_govTimelock, Role.GOV_TIMELOCK, true);
+    }
+
+    /// @inheritdoc IGNSAddressStore
+    function initializeGovEmergencyTimelock(address _govEmergencyTimelock) external reinitializer(23) {
+        if (_govEmergencyTimelock == address(0)) {
+            revert IGeneralErrors.InitError();
+        }
+
+        _setRole(_govEmergencyTimelock, Role.GOV_EMERGENCY_TIMELOCK, true);
+    }
+
+    // Addresses
+
+    /// @inheritdoc IGNSAddressStore
+    function getAddresses() external view returns (Addresses memory) {
+        return addressStore.globalAddresses;
+    }
+
+    // Roles
+
+    /// @inheritdoc IGNSAddressStore
+    function hasRole(address _account, Role _role) public view returns (bool) {
+        return addressStore.accessControl[_account][_role];
+    }
+
+    /// @inheritdoc IGNSAddressStore
+    function hasRoles(address _account, Role _roleA, Role _roleB) public view returns (bool) {
+        return addressStore.accessControl[_account][_roleA] || addressStore.accessControl[_account][_roleB];
+    }
+
+    /**
+     * @dev Update role for account
+     * @param _account account to update
+     * @param _role role to set
+     * @param _value true if allowed, false if not
+     */
+    function _setRole(address _account, Role _role, bool _value) internal {
+        addressStore.accessControl[_account][_role] = _value;
+        emit AccessControlUpdated(_account, _role, _value);
+    }
+
+    /// @inheritdoc IGNSAddressStore
+    function setRoles(
+        address[] calldata _accounts,
+        Role[] calldata _roles,
+        bool[] calldata _values
+    ) external onlyRoles(Role.GOV_TIMELOCK, Role.GOV_EMERGENCY_TIMELOCK) {
+        if (_accounts.length != _roles.length || _accounts.length != _values.length) {
+            revert IGeneralErrors.InvalidInputLength();
+        }
+
+        for (uint256 i = 0; i < _accounts.length; ++i) {
+            if (
+                (_roles[i] == Role.GOV_TIMELOCK && _accounts[i] == msg.sender) ||
+                (_roles[i] == Role.GOV_EMERGENCY_TIMELOCK && _accounts[i] == msg.sender)
+            ) {
+                revert NotAllowed();
+            }
+
+            _setRole(_accounts[i], _roles[i], _values[i]);
+        }
+    }
+
+    /**
+     * @dev Reverts if caller does not have role
+     * @param _role role to enforce
+     */
+    function _enforceRole(Role _role) internal view {
+        if (!hasRole(msg.sender, _role)) {
+            revert WrongAccess();
+        }
+    }
+
+    /**
+     * @dev Reverts if caller does not have at least one of the two roles
+     * @param _roleA role to enforce
+     * @param _roleB role to enforce
+     */
+    function _enforceRoles(Role _roleA, Role _roleB) internal view {
+        if (!hasRoles(msg.sender, _roleA, _roleB)) {
+            revert WrongAccess();
+        }
+    }
+
+    /**
+     * @dev Reverts if caller does not have role
+     */
+    modifier onlyRole(Role _role) {
+        _enforceRole(_role);
+        _;
+    }
+
+    /**
+     * @dev Reverts if caller does not have either of the roles
+     */
+    modifier onlyRoles(Role _roleA, Role _roleB) {
+        _enforceRoles(_roleA, _roleB);
+        _;
+    }
+
+    /**
+     * @dev Reverts if caller isn't this same contract (facets calling other facets)
+     */
+    modifier onlySelf() {
+        if (msg.sender != address(this)) {
+            revert WrongAccess();
+        }
+        _;
+    }
+}
