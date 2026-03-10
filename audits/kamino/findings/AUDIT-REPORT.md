@@ -11,9 +11,9 @@
 
 ## Executive Summary
 
-**Result: 2 Low-Medium, 2 Low, 8 Informational findings. 1 Immunefi submission.**
+**Result: 1 High, 2 Low-Medium, 2 Low, 8 Informational findings. 2 Immunefi submissions.**
 
-Across 4 programs and ~43,700 lines of Rust code, 80+ vulnerability hypotheses were tested across two audit passes. The initial audit (60+ hypotheses) found 0 exploitable vulnerabilities. A re-audit using per-instruction access control matrices, cross-adapter comparison tables, external data field tracing, and exploit pattern matching uncovered oracle-layer issues in the Scope program — specifically in the ChainlinkX (v10) oracle adapter and the `refresh_chainlink_price` handler.
+Across 4 programs and ~43,700 lines of Rust code, 80+ vulnerability hypotheses were tested across two audit passes. The initial audit (60+ hypotheses) found 0 exploitable vulnerabilities. A re-audit using per-instruction access control matrices, cross-adapter comparison tables, external data field tracing, and exploit pattern matching uncovered oracle-layer issues in the Scope program — specifically in the ChainlinkX (v10) oracle adapter and the `refresh_chainlink_price` handler. The most significant finding is a compound vulnerability where a permissionless crank operator can exploit missing multiplier validation during corporate action windows to corrupt xStocks prices on KLend.
 
 The klend, kvault, and kfarms programs remain exceptionally well-defended with no exploitable findings.
 
@@ -51,6 +51,28 @@ scope (oracle) ──> klend (lending) <──> kfarms (farming)
 ---
 
 ## Findings
+
+### FINDING-05 [High]: Permissionless Crank Exploits Missing Multiplier Validation to Corrupt xStocks Prices
+
+**Program:** scope
+**Files:** `oracles/chainlink.rs:408-504`, `handlers/handler_refresh_chainlink_price.rs`
+**Immunefi Submission:** [IMMUNEFI-SUBMISSION-002.md](IMMUNEFI-SUBMISSION-002.md)
+
+**Description:** The `update_price_v10` function takes a `current_multiplier` from the Chainlink v10 report and multiplies it into the oracle price with zero bounds checking. Combined with:
+1. **Permissionless crank** — any keypair can call `refresh_chainlink_price` with any valid DON-signed report
+2. **No CPI protection** — unlike `refresh_price_list`, no `check_execution_ctx` guard
+3. **Selective report submission** — crank can choose WHICH valid report to submit and WHEN
+4. **`activation_date_time = 0` bypass** — suspension mechanism skipped entirely when no corporate action is pending
+5. **Ignored `tokenized_price`** — Chainlink-provided cross-reference field never checked
+6. **3 unprotected entries** — entries #262, #266, #282 have no `ref_price` configured
+
+During a stock split, both pre-split and post-split DON-signed reports coexist as valid. A crank operator with KLend positions can selectively submit stale pre-split reports after admin resume, inflating collateral values and extracting protocol funds.
+
+**Impact:** Protocol insolvency ($5-20M xStocks TVL at risk in KLend isolated market). Zero multiplier produces $0 oracle price, enabling mass liquidation. Historical precedents: Moonwell ($1.8M), Morpho PAXG ($230K), Loopscale ($5.8M) — same vulnerability class.
+
+**On-chain evidence:** 13 live ChainlinkX v10 entries on Solana mainnet. 3 entries (#262, #266, #282) have zero secondary protection.
+
+---
 
 ### FINDING-01 [Low-Medium]: ChainlinkX v10 Ignores `tokenized_price` Field
 
@@ -367,7 +389,7 @@ Built full validation comparison across all 26 oracle adapters. Key asymmetries 
 
 Kamino Finance demonstrates **strong security engineering** across all four programs. The klend, kvault, and kfarms programs are exceptionally well-defended. The Scope oracle program has defense-in-depth gaps in the ChainlinkX (v10) adapter — specifically the ignored `tokenized_price` field and the missing CPI protection on the Chainlink refresh handler. These findings are mitigated by the cryptographic verification of Chainlink reports and klend's multi-layer price validation, but represent areas for improvement.
 
-**1 Immunefi submission warranted (FINDING-01).**
+**2 Immunefi submissions warranted (FINDING-05, FINDING-01).**
 
 ---
 

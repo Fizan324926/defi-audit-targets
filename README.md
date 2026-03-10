@@ -27,7 +27,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | [Gearbox V3](https://immunefi.com/bug-bounty/gearbox/) | $200,000 | Solidity | 0 (clean audit) | [`audits/gearbox/`](audits/gearbox/AUDIT-REPORT.md) | Complete |
 | [Reserve Protocol](https://immunefi.com/bug-bounty/reserve/) | $500,000 | Solidity | 0 (clean audit) | [`audits/reserve-protocol/`](audits/reserve-protocol/findings/AUDIT-REPORT.md) | Complete |
 | [Gains Network](https://immunefi.com/bug-bounty/gains-network/) | $200,000 | Solidity | 0 (clean audit) | [`audits/gains-network/`](audits/gains-network/findings/AUDIT-REPORT.md) | Complete |
-| [Kamino Finance](https://immunefi.com/bug-bounty/kamino/) | $100,000 | Rust / Solana | 2 Low-Medium, 2 Low | [`audits/kamino/`](audits/kamino/findings/AUDIT-REPORT.md) | Complete |
+| [Kamino Finance](https://immunefi.com/bug-bounty/kamino/) | $100,000 | Rust / Solana | 1 High, 2 Low-Medium, 2 Low | [`audits/kamino/`](audits/kamino/findings/AUDIT-REPORT.md) | Complete |
 
 ---
 
@@ -50,9 +50,10 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | 13 | Olympus | 001 | **MEDIUM** | YieldRepo hardcoded `backingPerToken` ($11.33) | [Report](audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-001.md) |
 | 14 | Beanstalk | 001 | **MED-HIGH** | SOP/Flood zero-slippage swap + manipulable spot deltaB | [Report](audits/beanstalk/findings/IMMUNEFI-SUBMISSION-001.md) |
 
-| 15 | Kamino | 001 | **LOW-MED** | ChainlinkX v10 ignores `tokenized_price` — manual `price * multiplier` may diverge | [Report](audits/kamino/findings/IMMUNEFI-SUBMISSION-001.md) |
+| 15 | Kamino | 002 | **HIGH** | Permissionless crank exploits missing multiplier validation to corrupt xStocks prices | [Report](audits/kamino/findings/IMMUNEFI-SUBMISSION-002.md) |
+| 16 | Kamino | 001 | **LOW-MED** | ChainlinkX v10 ignores `tokenized_price` — manual `price * multiplier` may diverge | [Report](audits/kamino/findings/IMMUNEFI-SUBMISSION-001.md) |
 
-**Total: 3 High, 2 Medium-High, 9 Medium, 1 Low-Medium across 11 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network: clean audits — 0 findings)
+**Total: 4 High, 2 Medium-High, 9 Medium, 1 Low-Medium across 11 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network: clean audits — 0 findings)
 
 ---
 
@@ -222,21 +223,22 @@ The protocol demonstrates exceptionally mature defense-in-depth: multi-DVN verif
 
 Solana DeFi protocol suite: lending (klend), yield vaults (kvault), oracle aggregation (scope), and farming/staking (kfarms). 4 Anchor programs, ~43,700 LOC Rust. Covers reserves, obligations, elevation groups, flash loans, withdrawal queues, ERC4626-like vaults, 40+ oracle types with TWAP/chain pricing, and delegated farming with warmup/cooldown. Two audit passes: 80+ hypotheses, per-instruction access control matrix, cross-adapter comparison, external data field tracing, exploit pattern matching.
 
-**Result: 2 Low-Medium, 2 Low, 8+ Informational findings. 1 Immunefi submission.**
+**Result: 1 High, 2 Low-Medium, 2 Low, 8+ Informational findings. 2 Immunefi submissions.**
 
-The klend, kvault, and kfarms programs demonstrate exceptional defense-in-depth. The Scope oracle program has defense-in-depth gaps in the ChainlinkX (v10) adapter.
+The klend, kvault, and kfarms programs demonstrate exceptional defense-in-depth. The Scope oracle program has critical gaps in the ChainlinkX (v10) adapter — missing multiplier validation, missing CPI protection, and ignored cross-reference fields create a compound vulnerability exploitable during corporate action windows.
 
 **Findings:**
 
 | ID | Severity | Program | Description |
 |----|----------|---------|-------------|
+| [002](audits/kamino/findings/IMMUNEFI-SUBMISSION-002.md) | **High** | scope | Permissionless crank exploits missing multiplier validation in v10 to corrupt xStocks prices — 3 entries with zero protection, `activation_date_time=0` bypass, $5-20M TVL at risk |
 | [001](audits/kamino/findings/IMMUNEFI-SUBMISSION-001.md) | Low-Medium | scope | ChainlinkX v10 ignores `tokenized_price` field — manual `price * current_multiplier` may diverge from Chainlink's pre-computed "24/7 tokenized equity price" |
 | FINDING-02 | Low-Medium | scope | Missing `check_execution_ctx` CPI protection on `refresh_chainlink_price` (asymmetric with `refresh_price_list`) |
 | FINDING-03 | Low | scope | Missing `check_execution_ctx` CPI protection on `refresh_pyth_lazer_price` |
 | FINDING-04 | Low | scope | Chainlink refresh path bypasses zero-price guard — v10 `current_multiplier = 0` would store zero price |
 
 **Full audit report:** [`AUDIT-REPORT.md`](audits/kamino/findings/AUDIT-REPORT.md)
-**Immunefi submission:** [`IMMUNEFI-SUBMISSION-001.md`](audits/kamino/findings/IMMUNEFI-SUBMISSION-001.md)
+**Immunefi submissions:** [`IMMUNEFI-SUBMISSION-001.md`](audits/kamino/findings/IMMUNEFI-SUBMISSION-001.md), [`IMMUNEFI-SUBMISSION-002.md`](audits/kamino/findings/IMMUNEFI-SUBMISSION-002.md)
 **Analysis files:** [`klend`](audits/kamino/notes/klend-analysis.md) | [`kvault/scope/kfarms`](audits/kamino/notes/secondary-analysis.md) | [`Cross-program`](audits/kamino/notes/cross-program-analysis.md) | [`Re-audit notes`](audits/kamino/notes/reaudit-instruction-matrix.md)
 
 ---
