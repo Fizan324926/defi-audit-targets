@@ -36,7 +36,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | [OpenZeppelin](https://immunefi.com/bug-bounty/openzeppelin/) | $500,000 | Solidity | 2 High, 4 Medium | [`audits/openzeppelin/`](audits/openzeppelin/findings/AUDIT-REPORT.md) | Complete |
 | [Flamingo Finance](https://immunefi.com/bug-bounty/flamingo-finance/) | $1,000,000 | C# (Neo N3) | 2 Medium | [`audits/flamingo-finance/`](audits/flamingo-finance/findings/AUDIT-REPORT.md) | Complete |
 | [Ref Finance](https://immunefi.com/bug-bounty/reffinance/) | $250,000 | Rust (NEAR) | 2 Medium | [`audits/ref-finance/`](audits/ref-finance/findings/AUDIT-REPORT.md) | Complete |
-| [Hathor Network](https://immunefi.com/bug-bounty/hathornetwork/) | $30,000 | Python + JS | 1 Critical, 2 High, 2 Medium | [`audits/hathor-network/`](audits/hathor-network/findings/AUDIT-REPORT.md) | Complete |
+| [Hathor Network](https://immunefi.com/bug-bounty/hathornetwork/) | $30,000 | Python + JS | 1 Critical, 2 High, 1 Medium | [`audits/hathor-network/`](audits/hathor-network/findings/AUDIT-REPORT.md) | Complete |
 
 ---
 
@@ -488,6 +488,30 @@ Uniswap V2-style AMM DEX and staking/reward protocol on the Neo N3 blockchain. C
 
 **Full audit report:** [`AUDIT-REPORT.md`](audits/flamingo-finance/findings/AUDIT-REPORT.md)
 **Immunefi submissions:** [`IMMUNEFI-SUBMISSION-001.md`](audits/flamingo-finance/findings/IMMUNEFI-SUBMISSION-001.md), [`IMMUNEFI-SUBMISSION-002.md`](audits/flamingo-finance/findings/IMMUNEFI-SUBMISSION-002.md)
+
+### Hathor Network — [`audits/hathor-network/`](audits/hathor-network/findings/AUDIT-REPORT.md)
+
+DAG-based blockchain with Python nano contracts sandbox. 3 repositories: hathor-core (Python full node with nano contracts system — custom builtins sandbox, AST validation, metered execution, P2P sync_v2, DAG consensus), hathor-wallet-lib (JavaScript wallet library), hathor-wallet-headless (headless wallet service). ~100K+ LOC Python. 100+ hypotheses tested.
+
+**Findings (1 Critical, 2 High, 1 Medium, 3 Low, 4 Informational — 2 Immunefi submissions):**
+
+| ID | Severity | Component | Description |
+|----|----------|-----------|-------------|
+| [001](audits/hathor-network/findings/IMMUNEFI-SUBMISSION-001.md) | **Critical** | Nano Contract Sandbox | SystemExit/KeyboardInterrupt escape `except Exception` handlers, trigger `crash_and_exit()` — permanent node crash + boot loop |
+| [002](audits/hathor-network/findings/IMMUNEFI-SUBMISSION-002.md) | **High** | MeteredExecutor | Fuel metering (`sys.settrace`) completely unimplemented — `FUEL_COST_MAP` dead code, infinite loops unmitigated |
+| F-03 | **High** | MeteredExecutor | Memory limit stored but never checked — `bytearray(10**9)` OOM-kills node |
+| F-04 | Medium | Custom Builtins | C-level builtins (`sorted`, `list`, `dict`) bypass Python opcode tracing |
+| F-05 | Low | Vertex Verifier | Wrong `parent_hash` in grandparent timestamp loop — `min_timestamp` never set (dead code) |
+| F-06 | Low | Consensus | `assert bool(meta.conflict_with)` stripped by `python -O` (developer FIXME exists) |
+| F-07 | Low | Sync v2 | DFS `popleft()` loses root context when stack exceeds limit |
+
+**Compensating control:** `NC_ON_CHAIN_BLUEPRINT_RESTRICTED=True` limits blueprint deployment to whitelisted addresses (mitigates immediate exploitability, code comment states restriction will be lifted).
+
+**Well-defended areas:** Import whitelist (well-curated), AST name blacklist (blocks dunders), custom `range` reimplementation, cross-contract call limits (MAX_RECURSION_DEPTH=100, MAX_CALL_COUNTER=250), restricted `__import__` function.
+
+**Full audit report:** [`AUDIT-REPORT.md`](audits/hathor-network/findings/AUDIT-REPORT.md)
+**Immunefi submissions:** [`IMMUNEFI-SUBMISSION-001.md`](audits/hathor-network/findings/IMMUNEFI-SUBMISSION-001.md), [`IMMUNEFI-SUBMISSION-002.md`](audits/hathor-network/findings/IMMUNEFI-SUBMISSION-002.md)
+**PoC files:** [`scripts/verify/`](audits/hathor-network/scripts/verify/)
 
 ---
 
