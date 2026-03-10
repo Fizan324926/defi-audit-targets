@@ -75,6 +75,7 @@ One of the largest DeFi protocols ($8B+ TVL). CDP stablecoin (DAI/USDS), savings
 | [001](audits/sky/findings/001-staking-rewards-duration-yield-loss.md) | High | StakingRewards.sol | `setRewardsDuration` mid-period integer truncation destroys staker yield |
 | [002](audits/sky/findings/002-splitter-farm-zero-dos.md) | Medium | Splitter.sol | `kick()` reverts when `farm==address(0)` + `burn<WAD`, DoSing SBE |
 | [003](audits/sky/findings/003-staking-rewards-zero-duration.md) | Medium | StakingRewards.sol | `setRewardsDuration(0)` permanently bricks reward distribution |
+| [004](audits/sky/findings/004-lockstake-lock-no-auth.md) | Medium | LockstakeEngine.sol | `lock()` uses `_getUrn` instead of `_getAuthedUrn` — unauthorized urn manipulation |
 
 ---
 

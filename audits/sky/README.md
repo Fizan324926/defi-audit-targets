@@ -49,6 +49,7 @@ Key repositories cloned:
 | [001](findings/001-staking-rewards-duration-yield-loss.md) | **High** | StakingRewards.sol | `setRewardsDuration` mid-period integer truncation destroys staker yield | Ready to submit |
 | [002](findings/002-splitter-farm-zero-dos.md) | **Medium** | Splitter.sol | `kick()` permanently reverts when `farm==address(0)` and `burn<WAD` | Ready to submit |
 | [003](findings/003-staking-rewards-zero-duration.md) | **Medium** | StakingRewards.sol | `setRewardsDuration(0)` permanently bricks reward distribution | Ready to submit |
+| [004](findings/004-lockstake-lock-no-auth.md) | **Medium** | LockstakeEngine.sol | `lock()` uses `_getUrn()` instead of `_getAuthedUrn()` — unauthorized urn state manipulation | Ready to submit |
 
 ---
 
@@ -57,21 +58,37 @@ Key repositories cloned:
 | ID | Contract | Claim | Reason Rejected |
 |----|----------|-------|-----------------|
 | [FP-001](findings/false-positives/FP-001-lockstake-reentrancy.md) | LockstakeEngine | CRITICAL reentrancy via malicious VoteDelegate | Factory only deploys standard VoteDelegate code |
-| [FP-002](findings/false-positives/FP-002-litepsm-cut-underflow.md) | DssLitePsm | Underflow in cut() | Invariant maintained; requires trusted-role attack |
+| [FP-002](findings/false-positives/FP-002-litepsm-cut-underflow.md) | DssLitePsm | Underflow in cut() | Invariant maintained by design |
+| [FP-003](findings/false-positives/FP-003-bridge-inflight-bypass.md) | L2TokenGateway / L2TokenBridge | HIGH: in-flight messages bypass isOpen | Inherent L1/L2 messaging constraint, not a bug |
+| [FP-004](findings/false-positives/FP-004-l1gateway-no-token-validation.md) | L1TokenGateway | HIGH: no l1Token registry validation | L2 validates token before encoding; onlyCounterpartGateway prevents forgery |
+| [FP-005](findings/false-positives/FP-005-d3m-exit-divzero.md) | D3M4626TypePool | HIGH: exit() division by zero | Not reachable — vat.slip prevents calling with zero Art |
+| [FP-006](findings/false-positives/FP-006-d3m-flash-manipulation.md) | D3MAaveTypeBufferPlan | HIGH: flash loan inflates getTargetAssets | Admitted known design in code comments |
+| [FP-007](findings/false-positives/FP-007-gemjoin9-frontrun.md) | GemJoin9 | MEDIUM: front-running join() | Self-documented known design; atomic proxy usage required |
 
 ---
 
-## Out of Scope / Known Issues Verified
+## Out of Scope / Known Issues Verified (Full Re-Audit, 27 repos)
 
-- **Exit fee bypass on liquidations** — explicitly stated as known in Sky's program rules
-- **Large auction amounts delaying selectVoteDelegate** — known per program rules
-- **Sandwich/MEV attacks on SBE** — explicitly known per dss-flappers rules
-- **Any issue in original Synthetix StakingRewards** — explicitly excluded
-- **Emergency spell schedule() no auth** — intended design for pre-authorized spells
-- **L1TokenBridge no whitelist on finalize** — L2 provides validation; requires compromised bridge to exploit
-- **GemJoin8 GUSD lock on upgrade** — external dependency, temporary, LOW
-- **Reentrancy guards on LockstakeEngine** — VoteDelegateLike.lock() is standard code with no reentrant callback
-- **DssLitePsm.cut() underflow** — invariant maintained through normal operations
+**Round 1:** Exit fee bypass on liquidations (known), MEV/sandwich on SBE (known),
+canonical Synthetix bugs (excluded), large auction amounts (known),
+emergency spell schedule() no auth (by design), LitePsm cut() underflow (invariant holds),
+LockstakeEngine reentrancy via VoteDelegate (factory only deploys standard code).
+
+**Round 2 (comprehensive coverage):**
+- Bridge in-flight message bypass — inherent Arbitrum/Optimism design constraint (FP-003)
+- L1TokenGateway token validation — L2 validates before message encoding (FP-004)
+- D3M4626TypePool exit div/0 — unreachable via vat.slip protection (FP-005)
+- D3MAaveTypeBufferPlan flash manipulation — documented known design (FP-006)
+- GemJoin9 frontrun — self-documented, atomic proxy usage required (FP-007)
+- DssAutoLine exec() underflow — wards trusted trigger required
+- End.cash() bag reuse — long-standing MakerDAO End design choice
+- VoteDelegate.lock() CEI — not exploitable with standard ERC-20 tokens
+- FlapperUniV2 stale pip DoS — oracle delay is intentional safety feature
+- LockstakeMigrator line=0 reset — intentional ward-controlled migration design
+- Swapper minOut=0 — wards trusted (authorized callers only)
+- DepositorUniV3 era=0 bypass — wards trusted (automation role)
+- DssVest rate cap truncation — less than 1 full token total overshoot
+- LockstakeEngine.wipe() no auth — net positive for victim (debt repaid), not harmful
 
 ---
 
@@ -124,3 +141,9 @@ When `burn < WAD` and `farm == address(0)`, `kick()` attempts `usdsJoin.exit(add
 **File:** `endgame-toolkit/src/synthetix/StakingRewards.sol:172-182`
 
 No guard against `_rewardsDuration = 0`. After a period completes, calling `setRewardsDuration(0)` stores zero. All subsequent `notifyRewardAmount` calls panic with division by zero, permanently bricking `VestedRewardsDistribution.distribute()`.
+
+### Finding 004 — Medium: LockstakeEngine.lock() Missing Authorization Check
+
+**File:** `lockstake/src/LockstakeEngine.sol:291-309`
+
+`lock()` uses `_getUrn(owner, index)` instead of `_getAuthedUrn(owner, index)`. Every other state-modifying function (`free`, `draw`, `selectVoteDelegate`, `selectFarm`, `wipe`, `getReward`) requires the caller to be authorized for the urn. Anyone can call `lock(victimOwner, victimIndex, wad)` to force SKY into a victim's urn: the attacker's SKY is forwarded to the victim's selected VoteDelegate (inflating that delegate's governance weight without consent), ink is added to the victim's urn, and lssky is minted and staked into the victim's farm. The attacker permanently loses their SKY but achieves unauthorized governance state manipulation. There is no `urnAuctions[urn] == 0` guard either, meaning this can be called during active auctions.
