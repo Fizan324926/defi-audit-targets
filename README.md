@@ -23,6 +23,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | [Optimism](https://immunefi.com/bug-bounty/optimism/) | $2,000,042 | Solidity + Go | 1 Medium | [`audits/optimism/`](audits/optimism/README.md) | Complete |
 | [Olympus DAO](https://immunefi.com/bug-bounty/olympus/) | $3,333,333 | Solidity | 1 Medium-High, 5 Medium | [`audits/olympus-dao/`](audits/olympus-dao/bophades/findings/AUDIT-REPORT.md) | Complete |
 | [Orca Whirlpool](https://immunefi.com/bug-bounty/orca/) | $500,000 | Rust / Solana | 1 Medium (borderline) | [`audits/orca-whirlpool/`](audits/orca-whirlpool/README.md) | Complete |
+| [Beanstalk](https://immunefi.com/bug-bounty/beanstalk/) | $1,100,000 | Solidity | 1 Medium-High | [`audits/beanstalk/`](audits/beanstalk/findings/AUDIT-REPORT.md) | Complete |
 | [Gearbox V3](https://immunefi.com/bug-bounty/gearbox/) | $200,000 | Solidity | 0 (clean audit) | [`audits/gearbox/`](audits/gearbox/AUDIT-REPORT.md) | Complete |
 
 ---
@@ -44,8 +45,9 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | 11 | Olympus | 008 | **MEDIUM** | Stale price oracle wall swap arbitrage (24h window) | [Report](audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-008.md) |
 | 12 | Olympus | 010 | **MEDIUM** | Heart beat front-running via predictable price updates | [Report](audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-010.md) |
 | 13 | Olympus | 001 | **MEDIUM** | YieldRepo hardcoded `backingPerToken` ($11.33) | [Report](audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-001.md) |
+| 14 | Beanstalk | 001 | **MED-HIGH** | SOP/Flood zero-slippage swap + manipulable spot deltaB | [Report](audits/beanstalk/findings/IMMUNEFI-SUBMISSION-001.md) |
 
-**Total: 3 High, 1 Medium-High, 9 Medium across 7 protocols** (LayerZero + Gearbox V3: clean audits — 0 findings)
+**Total: 3 High, 2 Medium-High, 9 Medium across 8 protocols** (LayerZero + Gearbox V3: clean audits — 0 findings)
 
 ---
 
@@ -126,6 +128,29 @@ Kernel-Module-Policy architecture DeFi protocol. OHM token with Range Bound Stab
 **Full audit report:** [`AUDIT-REPORT.md`](audits/olympus-dao/bophades/findings/AUDIT-REPORT.md)
 **Immunefi submissions:** `audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-001.md` through `013.md`
 **PoC files:** `audits/olympus-dao/bophades/scripts/verify/`
+
+---
+
+### Beanstalk Protocol — [`audits/beanstalk/`](audits/beanstalk/findings/AUDIT-REPORT.md)
+
+Credit-based stablecoin protocol on Arbitrum. EIP-2535 Diamond proxy with 37+ facets, Basin DEX (Wells, Pumps), Pipeline, and Tractor automation. 226 Beanstalk + 120 Basin Solidity files covering Silo (deposits/stalk/seeds), Field (pods/soil), Barn (fertilizer), Convert, Season/Sunrise, Flood/SOP, Gauge, and cross-cutting systems.
+
+**Findings (1 confirmed — 60+ hypotheses tested):**
+
+| ID | Severity | Contract | Description |
+|----|----------|----------|-------------|
+| [001](audits/beanstalk/findings/IMMUNEFI-SUBMISSION-001.md) | Medium-High | LibFlood.sol | SOP/Flood zero-slippage swap + manipulable spot deltaB |
+
+**Basin observations (2):** Pump silent update failure (Medium), Stable2 Newton oscillation (Low).
+
+**Notable safe areas:** Tractor EIP-712 (bounds checking verified), Farm multicall (dual reentrancy guard), Convert capacity (TWAP-protected), BDV calculation (EMA-protected), Diamond admin, Germination system.
+
+**Key false positive eliminated:** `calculateSopPerWell` division by zero — mathematically proved unreachable (shaveToLevel bounded by guard condition).
+
+**Full audit report:** [`AUDIT-REPORT.md`](audits/beanstalk/findings/AUDIT-REPORT.md)
+**Season/Sun sub-report:** [`SEASON-SUN-AUDIT-REPORT.md`](audits/beanstalk/findings/SEASON-SUN-AUDIT-REPORT.md)
+**Immunefi submission:** [`IMMUNEFI-SUBMISSION-001.md`](audits/beanstalk/findings/IMMUNEFI-SUBMISSION-001.md)
+**PoC:** [`PoC_001_SopFloodZeroSlippage.sol`](audits/beanstalk/scripts/verify/PoC_001_SopFloodZeroSlippage.sol)
 
 ---
 
