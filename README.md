@@ -30,6 +30,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | [Kamino Finance](https://immunefi.com/bug-bounty/kamino/) | $100,000 | Rust / Solana | 1 High, 2 Low-Medium, 2 Low | [`audits/kamino/`](audits/kamino/findings/AUDIT-REPORT.md) | Complete |
 | [Chainlink](https://immunefi.com/bug-bounty/chainlink/) | $3,000,000 | Solidity + Rust + Go | 0 (clean audit) | [`audits/chainlink/`](audits/chainlink/findings/AUDIT-REPORT.md) | Complete |
 | [Origin Protocol](https://immunefi.com/bug-bounty/originprotocol/) | $1,000,000 | Solidity | 2 Medium (Immunefi) | [`audits/origin-protocol/`](audits/origin-protocol/findings/CONSOLIDATED-AUDIT-REPORT.md) | Complete |
+| [Yearn Finance](https://immunefi.com/bug-bounty/yearnfinance/) | $200,000 | Solidity + Vyper | 5 Medium | [`audits/yearn-finance/`](audits/yearn-finance/findings/CONSOLIDATED-AUDIT-REPORT.md) | Complete |
 
 ---
 
@@ -57,8 +58,13 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 
 | 17 | Origin | 001 | **MEDIUM** | OETHPlumeVault `_mint` override dead code — access control bypass | [Report](audits/origin-protocol/findings/IMMUNEFI-SUBMISSION-001.md) |
 | 18 | Origin | 002 | **MEDIUM** | OETHOracleRouter unsafe int256→uint256 cast (missing SafeCast) | [Report](audits/origin-protocol/findings/IMMUNEFI-SUBMISSION-002.md) |
+| 19 | Yearn | 001 | **MEDIUM** | CombinedChainlinkOracle missing zero/negative price validation — redemption DoS | [Report](audits/yearn-finance/findings/IMMUNEFI-SUBMISSION-001.md) |
+| 20 | Yearn | 002 | **MEDIUM** | Gauge.sol residual approval accumulation to VE_YFI_POOL | [Report](audits/yearn-finance/findings/IMMUNEFI-SUBMISSION-002.md) |
+| 21 | Yearn | 003 | **MEDIUM** | RewardPool/dYFIRewardPool division by zero when ve_supply is zero | [Report](audits/yearn-finance/findings/IMMUNEFI-SUBMISSION-003.md) |
+| 22 | Yearn | 004 | **MEDIUM** | Zap.sol zero slippage on intermediate Curve pool operations — MEV | [Report](audits/yearn-finance/findings/IMMUNEFI-SUBMISSION-004.md) |
+| 23 | Yearn | 005 | **MEDIUM** | StakingRewardDistributor division by zero when total_weight is zero | [Report](audits/yearn-finance/findings/IMMUNEFI-SUBMISSION-005.md) |
 
-**Total: 4 High, 2 Medium-High, 11 Medium, 1 Low-Medium across 13 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network + Chainlink: clean audits — 0 findings)
+**Total: 4 High, 2 Medium-High, 16 Medium, 1 Low-Medium across 14 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network + Chainlink: clean audits — 0 findings)
 
 ---
 
@@ -332,6 +338,29 @@ Multichain yield engine with rebasing tokens (OUSD, OETH, superOETHb, OS) backed
 **Sub-reports:** [`Strategy`](audits/origin-protocol/findings/AUDIT-REPORT.md) | [`Vault/Token`](audits/origin-protocol/findings/VAULT-TOKEN-AUDIT-REPORT.md) | [`Oracle/Zapper/Bridge`](audits/origin-protocol/findings/AUDIT-REPORT-ORACLE-ZAPPER-BRIDGE.md) | [`ARM/Governance`](audits/origin-protocol/findings/AUDIT-REPORT-ARM-GOVERNANCE.md)
 **Immunefi submissions:** [`IMMUNEFI-SUBMISSION-001.md`](audits/origin-protocol/findings/IMMUNEFI-SUBMISSION-001.md), [`IMMUNEFI-SUBMISSION-002.md`](audits/origin-protocol/findings/IMMUNEFI-SUBMISSION-002.md)
 **PoC files:** [`scripts/verify/`](audits/origin-protocol/scripts/verify/)
+
+### Yearn Finance — [`audits/yearn-finance/`](audits/yearn-finance/findings/CONSOLIDATED-AUDIT-REPORT.md)
+
+Full-stack DeFi yield protocol. 8 repositories: V3 Vault (VaultV3.vy, Vyper 0.3.7), TokenizedStrategy (Solidity delegatecall proxy), veYFI governance (vote-escrow, gauges, rewards), stYFI staking (14-day streams, integral accounting), vault-periphery (Accountant, DebtAllocator, Auction), yearn-boosted-staker (bitmap weights), and yearn-yb (Locker, YToken, Zap). ~60,911 LOC across Solidity + Vyper. 60+ hypotheses tested.
+
+**Findings (5 Medium, 6 Low, 13 Informational — 5 Immunefi submissions):**
+
+| ID | Severity | Contract | Description |
+|----|----------|----------|-------------|
+| [001](audits/yearn-finance/findings/IMMUNEFI-SUBMISSION-001.md) | Medium | CombinedChainlinkOracle.vy | Missing zero/negative price validation — dYFI redemption DoS |
+| [002](audits/yearn-finance/findings/IMMUNEFI-SUBMISSION-002.md) | Medium | Gauge.sol | Residual `approve()` accumulation to VE_YFI_POOL |
+| [003](audits/yearn-finance/findings/IMMUNEFI-SUBMISSION-003.md) | Medium | RewardPool.vy | Division by zero when `ve_supply` is zero — permanent claim lockout |
+| [004](audits/yearn-finance/findings/IMMUNEFI-SUBMISSION-004.md) | Medium | Zap.sol | Zero slippage on intermediate Curve operations — compound MEV sandwich |
+| [005](audits/yearn-finance/findings/IMMUNEFI-SUBMISSION-005.md) | Medium | StakingRewardDistributor.vy | Division by zero when `total_weight` is zero — distributor bricks |
+
+**Core protocol (VaultV3 + TokenizedStrategy): CLEAN** — 0 exploitable vulnerabilities. Internal accounting neutralizes all ERC4626 donation/inflation attacks. All 24 unsafe operations mathematically proven safe. Profit locking prevents front-running. Shared reentrancy guard blocks all re-entry.
+
+**False positives eliminated (7):** VaultV3 `_process_report` div-by-zero (proved unreachable), Auction callback reentrancy (`kick()` has nonReentrant), YToken unbacked minting (cache tracking correct), StakingRewardDistributor stale weight (constant during catch-up), VaultV3/TokenizedStrategy first-depositor (internal accounting), Gauge stale boost (known Curve pattern).
+
+**Full consolidated report:** [`CONSOLIDATED-AUDIT-REPORT.md`](audits/yearn-finance/findings/CONSOLIDATED-AUDIT-REPORT.md)
+**Sub-reports:** [`VaultV3 Deep Analysis`](audits/yearn-finance/findings/VAULTV3-AUDIT-REPORT.md) | [`Vyper 0.3.7 Compiler`](audits/yearn-finance/findings/VYPER-0.3.7-COMPILER-BUGS.md) | [`Per-Repo Report`](audits/yearn-finance/findings/AUDIT-REPORT.md)
+**Immunefi submissions:** `IMMUNEFI-SUBMISSION-001.md` through `005.md`
+**PoC files:** [`scripts/verify/`](audits/yearn-finance/scripts/verify/)
 
 ---
 
