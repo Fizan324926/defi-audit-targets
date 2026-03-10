@@ -42,6 +42,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | [Filecoin](https://immunefi.com/bug-bounty/filecoin/) | $150,000 | Go + Rust | 0 (clean audit) | [`audits/filecoin/`](audits/filecoin/findings/AUDIT-REPORT.md) | Complete |
 | [SushiSwap](https://immunefi.com/bug-bounty/sushiswap/) | $200,000 | Solidity | 1 High, 3 Medium, 5 Low | [`audits/sushiswap/`](audits/sushiswap/findings/AUDIT-REPORT.md) | Complete |
 | [Floe Labs](https://immunefi.com/bug-bounty/floelabs/) | $50,000 | Solidity | 0 (clean audit) | [`audits/floe-labs/`](audits/floe-labs/findings/AUDIT-REPORT.md) | Complete |
+| [JustLend DAO](https://immunefi.com/bug-bounty/justlenddao/) | $50,000 | Solidity (TRON) | 1 Medium | [`audits/justlend/`](audits/justlend/findings/AUDIT-REPORT.md) | Complete |
 
 ---
 
@@ -81,8 +82,9 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | 30 | Hathor Network | 002 | **HIGH** | Fuel metering + memory limits completely unimplemented — infinite loop/OOM DoS | [Report](audits/hathor-network/findings/IMMUNEFI-SUBMISSION-002.md) |
 | 31 | SushiSwap | 002 | **HIGH** | IndexPool `_pow()` broken binary exponentiation — permanent DOS of `burnSingle()` | [Report](audits/sushiswap/findings/IMMUNEFI-SUBMISSION-002.md) |
 | 32 | SushiSwap | 001 | **MEDIUM** | CLMigrator wrong sqrtPrice reference causes token loss when `activeTick >= tickUpper` | [Report](audits/sushiswap/findings/IMMUNEFI-SUBMISSION-001.md) |
+| 33 | JustLend | 001 | **MEDIUM** | WJST.getPriorVotes lacks checkpoint mechanism — post-proposal vote buying | [Report](audits/justlend/findings/IMMUNEFI-SUBMISSION-001.md) |
 
-**Total: 1 Critical, 7 High, 2 Medium-High, 20 Medium, 1 Low-Medium across 23 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network + Chainlink + Spark + Merchant Moe + Stellar + Xterio + Filecoin: clean audits — 0 findings)
+**Total: 1 Critical, 7 High, 2 Medium-High, 21 Medium, 1 Low-Medium across 24 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network + Chainlink + Spark + Merchant Moe + Stellar + Xterio + Filecoin: clean audits — 0 findings)
 
 ---
 
@@ -572,6 +574,30 @@ Comprehensive multi-generation AMM audit. 5 repositories: V2-Core (Uniswap V2 fo
 **Full audit report:** [`AUDIT-REPORT.md`](audits/sushiswap/findings/AUDIT-REPORT.md)
 **Immunefi submissions:** [`IMMUNEFI-SUBMISSION-001.md`](audits/sushiswap/findings/IMMUNEFI-SUBMISSION-001.md) (CLMigrator), [`IMMUNEFI-SUBMISSION-002.md`](audits/sushiswap/findings/IMMUNEFI-SUBMISSION-002.md) (IndexPool _pow)
 **PoC files:** [`scripts/verify/`](audits/sushiswap/scripts/verify/)
+
+---
+
+### JustLend DAO — [`audits/justlend/`](audits/justlend/findings/AUDIT-REPORT.md)
+
+Compound V2 fork on TRON blockchain. 52 Solidity files (~15,447 LOC) with custom modifications: WJST vote-and-lock governance token (replacing Comp checkpoints), modified CEther with excess TRX refund, separated reserveAdmin role, hardcoded USDT return value skip, incremental voting in GovernorBravo, and TRON-specific block timing (3s blocks). 40+ hypotheses tested across governance, lending, oracle, and admin surfaces. Deployed contract verification via TronScan ABI comparison.
+
+**Findings (1 Medium, 4 Low, 5 Informational — 1 Immunefi submission):**
+
+| ID | Severity | Contract | Description |
+|----|----------|----------|-------------|
+| [001](audits/justlend/findings/IMMUNEFI-SUBMISSION-001.md) | Medium | WJST.sol | `getPriorVotes()` ignores `blockNumber` parameter — returns current balance, enabling post-proposal vote buying |
+| 002 | Low | CErc20.sol | `doTransferOut` silently skips USDT return value check |
+| 003 | Low | GovernorBravoDelegate.sol | Unsafe `uint96(votes)` downcast — silent truncation |
+| 004 | Low | WJST.sol | `transferFrom` missing SafeMath on `balanceOf_[dst] += sad` |
+| 005 | Low | CEther.sol | Excess TRX refund via `.transfer()` (2300 gas) may fail for contracts |
+
+**Key architecture differences from Compound V2:** WJST vote-and-lock governance (tokens locked during voting, no checkpoints), reserveAdmin separation, explicit `votes` parameter in `castVote()`, TRON blocksPerYear=10,512,000.
+
+**Deployed vs GitHub divergence:** Comptroller on-chain has borrow cap + collateral factor guardian subsystems absent from GitHub. All other contracts match.
+
+**Full audit report:** [`AUDIT-REPORT.md`](audits/justlend/findings/AUDIT-REPORT.md)
+**Immunefi submission:** [`IMMUNEFI-SUBMISSION-001.md`](audits/justlend/findings/IMMUNEFI-SUBMISSION-001.md)
+**PoC:** [`PoC_001_WJSTGovernanceManipulation.sol`](audits/justlend/scripts/verify/PoC_001_WJSTGovernanceManipulation.sol)
 
 ---
 
