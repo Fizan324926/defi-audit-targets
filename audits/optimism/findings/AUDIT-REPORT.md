@@ -17,7 +17,7 @@ Comprehensive security audit of the Optimism smart contract suite across 162 Sol
 - **L2 Contracts** (L2CrossDomainMessenger, L2StandardBridge, CrossL2Inbox, SuperchainTokenBridge, GasPriceOracle, SystemConfig)
 - **Shared Libraries** (Hashing, Encoding, SafeCall, TransientContext, Types)
 
-**Result**: 1 confirmed Medium finding, 0 Critical/High findings, 80+ false positives eliminated.
+**Result**: 1 confirmed Medium finding, 0 Critical/High findings, 120+ false positives eliminated across 2 audit passes.
 
 ---
 
@@ -129,6 +129,48 @@ See [M-01 full writeup](./M-01-SuperFaultDisputeGame-closeGame-ordering.md)
 
 ---
 
+## Second-Pass Deep Audit (Cross-Contract + Go Code)
+
+A comprehensive second-pass audit was performed targeting under-explored areas:
+
+### OptimismPortal2 Withdrawal Lifecycle (12 vectors analyzed)
+| Vector | Status |
+|--------|--------|
+| Double-finalization via re-prove | SECURE (finalizedWithdrawals keyed by hash only) |
+| Blacklist race (prove → blacklist → finalize) | SECURE (re-checks at finalize time) |
+| Prove against IN_PROGRESS game, game loses | SECURE (re-checks DEFENDER_WINS at finalize) |
+| Game impersonation via fake gameData() | SECURE (factory registry check) |
+| Anchor state poisoning after blacklist | SECURE (retirement mechanism as defense) |
+| proofSubmitters unbounded growth | INFORMATIONAL (O(1) on-chain access) |
+| uint32 truncation in checkpoint cursor | INFEASIBLE (4.3B entries, astronomical cost) |
+| Timing manipulation on finality delays | SECURE (both delays enforced independently) |
+
+### Cross-Contract Interactions (15+ contracts, 3 flows)
+| Flow | Status |
+|------|--------|
+| L1 Bridge lifecycle (deposit→withdrawal) | SECURE (ETHLockbox auth + unsafe target blocking + l2Sender sentinel) |
+| Superchain Interop (L2→L2 messaging) | SECURE (burn-before-send + warm-slot check + node validation) |
+| DelayedWETH/FaultDisputeGame bonds | SECURE (per-game WETH accounting + immutable delay + pause fallback) |
+
+### op-node Go Code (4 potential findings, all eliminated)
+| Finding | Elimination Reason |
+|---------|-------------------|
+| Span batch missing SetCode tx type check | Pre-Holocene only (Holocene active since Jan 2025) |
+| Span batch missing fork activation block check | Pre-Holocene only (Holocene active since Jan 2025) |
+| Channel frame pruning size accounting bug | Pre-Holocene only + permissioned batcher |
+| P2P Publisher Close() resource leak for V3/V4 | Informational only (not a security vulnerability) |
+
+### OPContractsManager + New Contracts (5 contract groups)
+| Contract Group | Status |
+|----------------|--------|
+| OPContractsManagerV2 (deployment factory) | SECURE (immutable implementations, role validation) |
+| OPContractsManagerMigrator | SECURE (admin-only, proper chain validation) |
+| SuperFaultDisputeGame (beyond M-01) | SECURE (all design differences vs FDG are intentional) |
+| L2 New (FeeSplitter, NativeAssetLiquidity, L1Withdrawer) | SECURE (tight access controls, invariant checks) |
+| Encoding library (super root proof) | SECURE (no ambiguity, correct offsets) |
+
+---
+
 ## Codebase Security Assessment
 
 The Optimism smart contract suite demonstrates **mature, defense-in-depth security engineering**:
@@ -144,8 +186,22 @@ The Optimism smart contract suite demonstrates **mature, defense-in-depth securi
 
 ## Methodology
 
+### Pass 1: Broad Coverage
 - Full manual code review of all 162 Solidity files in scope
 - 4 parallel deep-audit agents covering bridge/portal, fault proofs, cannon/MIPS, and L2/SystemConfig
 - Cross-verification of on-chain and off-chain Go implementations for MIPS VM
-- False positive elimination through code tracing, edge case analysis, and ISA comparison
-- 80+ potential issues investigated, 1 confirmed as genuine bug
+- 80+ potential issues investigated
+
+### Pass 2: Deep Dive
+- 4 additional parallel agents targeting under-explored areas
+- OptimismPortal2 withdrawal lifecycle: prove→finalize race conditions, timing attacks
+- Cross-contract interactions: ETHLockbox drain vectors, superchain interop message forgery, cross-game bond theft
+- op-node Go code: derivation pipeline, batch validation, P2P gossip, channel assembly
+- New/under-audited contracts: OPContractsManagerV2, FeeSplitter, NativeAssetLiquidity, L1Withdrawer
+- 40+ additional vectors investigated and eliminated
+
+### False Positive Elimination
+- Kill switch analysis (admin-only, astronomical preconditions, broken dependencies)
+- Defense verification (existing mitigations traced through code)
+- Live deployment validation (Holocene active since Jan 2025 eliminates pre-Holocene bugs)
+- Total: 120+ issues investigated, 1 confirmed as genuine bug (M-01)

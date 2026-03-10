@@ -21,7 +21,7 @@ Source: https://github.com/ethereum-optimism/optimism
 |----|----------|-------|--------|
 | M-01 | MEDIUM | SuperFaultDisputeGame.closeGame() blocks credit claims during pause after bond distribution decided | CONFIRMED |
 
-80+ potential issues investigated, 1 confirmed. All others eliminated as false positives.
+120+ potential issues investigated across 2 audit passes, 1 confirmed. All others eliminated as false positives.
 
 ## Verification
 
