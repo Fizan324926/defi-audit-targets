@@ -17,6 +17,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 
 | Program | Max Bounty | Language | Findings | Audit Folder | Status |
 |---------|-----------|----------|----------|--------------|--------|
+| [LayerZero](https://immunefi.com/bug-bounty/layerzero/) | $15,000,000 | Solidity + Rust | 0 (clean audit) | [`audits/layerzero/`](audits/layerzero/AUDIT-REPORT.md) | Complete |
 | [Sky (MakerDAO)](https://immunefi.com/bug-bounty/sky/) | $10,000,000 | Solidity | 1 High, 2 Medium | [`audits/sky/`](audits/sky/README.md) | Complete |
 | [GMX V2 Synthetics](https://immunefi.com/bug-bounty/gmx/) | $5,000,000 | Solidity | 2 High | [`audits/gmx-synthetics/`](audits/gmx-synthetics/README.md) | Complete |
 | [Optimism](https://immunefi.com/bug-bounty/optimism/) | $2,000,042 | Solidity + Go | 1 Medium | [`audits/optimism/`](audits/optimism/README.md) | Complete |
@@ -44,7 +45,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | 12 | Olympus | 010 | **MEDIUM** | Heart beat front-running via predictable price updates | [Report](audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-010.md) |
 | 13 | Olympus | 001 | **MEDIUM** | YieldRepo hardcoded `backingPerToken` ($11.33) | [Report](audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-001.md) |
 
-**Total: 3 High, 1 Medium-High, 9 Medium across 6 protocols** (Gearbox V3: clean audit — 0 findings)
+**Total: 3 High, 1 Medium-High, 9 Medium across 7 protocols** (LayerZero + Gearbox V3: clean audits — 0 findings)
 
 ---
 
@@ -165,6 +166,27 @@ The codebase demonstrates exceptional defense-in-depth: accounting-based ERC4626
 | CurveTWAPPriceFeed | Informational | Division-by-zero if Curve pool oracle returns 0 (practically impossible) |
 
 **Full audit report:** [`AUDIT-REPORT.md`](audits/gearbox/AUDIT-REPORT.md)
+
+---
+
+### LayerZero Protocol — [`audits/layerzero/`](audits/layerzero/AUDIT-REPORT.md)
+
+Cross-chain messaging protocol with $15M max Immunefi bounty. V1 (EVM) + V2 (EVM + Solana) covering EndpointV2, DVN verification, OFT token bridges, Executor delivery, and 50+ chain deployments. 60+ Solidity contracts + 20+ Solana Rust programs, ~15,000+ LOC.
+
+**Result: Clean audit — 0 exploitable vulnerabilities found across 107+ hypotheses.**
+
+The protocol demonstrates exceptionally mature defense-in-depth: multi-DVN verification model (required + optional threshold), DVN address binding via msg.sender, lazy inbound nonces with payload hash verification, two-phase compose (store-then-execute), immutable endpoint/token references, role-based ACL with denylist priority, and lossless OFT decimal conversion.
+
+**Low/Informational observations only:**
+
+| Area | Severity | Description |
+|------|----------|-------------|
+| PriceFeed `_estimateFeeByEid()` | Low | Double-computation for L2 eids (mitigated by explicit config) |
+| OFTCore `_toSD()` | Low | Silent uint64 truncation (already fixed in devtools version) |
+
+**Full audit report:** [`AUDIT-REPORT.md`](audits/layerzero/AUDIT-REPORT.md)
+**Sub-reports:** [`DVN/Executor/Worker`](audits/layerzero/findings/AUDIT-REPORT-DVN-EXECUTOR-WORKER-2026-03-02.md) | [`OFT/OApp`](audits/layerzero/findings/AUDIT-REPORT-OFT-OAPP-2026-03-02.md)
+**False positive documentation:** `audits/layerzero/notes/false-positives/` (7 detailed writeups)
 
 ---
 
