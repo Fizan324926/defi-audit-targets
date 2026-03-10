@@ -21,7 +21,7 @@ Authoritative rulebook for conducting smart contract and protocol security audit
 7. [Phase 6 — Exploit Development](#7-phase-6--exploit-development)
 8. [Phase 7 — Report Writing & Immunefi Submission](#8-phase-7--report-writing--immunefi-submission)
 9. [Phase 8 — Repository Organization](#9-phase-8--repository-organization)
-10. [Vulnerability Catalog](#10-vulnerability-catalog)
+10. [Vulnerability Catalog](#10-vulnerability-catalog) *(incl. Solana-specific, Python/VM Sandbox-specific)*
 11. [Auditor Quick-Reference Checklist](#11-auditor-quick-reference-checklist)
 
 ---
@@ -1055,6 +1055,37 @@ function _lzReceive(uint16 srcChainId, bytes memory srcAddress,
 
 ---
 
+### PYTHON / VM SANDBOX-SPECIFIC (execution sandboxes, WASM VMs, custom interpreters)
+
+**What to grep for:** `compile(`, `__builtins__`, `sys.settrace`, `sys.setprofile`, `BaseException`, `SystemExit`, `settrace`, `FUEL`, `fuel`, `metering`, `memory_limit`, `DISABLED_BUILTINS`, `AST_NAME_BLACKLIST`
+
+| Pattern | Tier | What to Look For |
+|---------|------|-----------------|
+| Exception hierarchy escape | Critical | Sandbox catches `Exception` but not `BaseException` — `SystemExit`, `KeyboardInterrupt`, `GeneratorExit` propagate through all handlers to crash the host process |
+| Dangerous builtins exposed | Critical | `SystemExit`, `KeyboardInterrupt`, `BaseException`, `GeneratorExit`, `__import__`, `compile` available to sandboxed code |
+| Unimplemented metering / dead code | High | Fuel/gas constants defined but never decremented; `sys.settrace()` or `sys.setprofile()` never called; cost maps defined as dead code |
+| Memory limits stored but unchecked | High | `memory_limit` field stored in sandbox but never enforced via `resource.setrlimit`, `tracemalloc`, or custom tracking |
+| C-level builtin bypass of tracing | High | Even with `sys.settrace`, native C builtins (`sorted`, `list`, `dict`, `set`, `max`, `min`, `sum`) run unmetered C code that bypasses Python opcode tracing |
+| AST validator gaps | High | AST validation missing `visit_Raise()`, `visit_Import()`, or `visit_Call()` for dangerous patterns; dangerous names not in blacklist |
+| Persistent crash / boot loop | Critical | Malicious input saved to persistent storage (blockchain, DB) BEFORE validation — on restart, host re-encounters same input and crashes again permanently |
+| Compensating control mistaken for fix | Medium | Configuration-level restriction (e.g., address whitelist for deployment) treated as security fix — code comments indicate restriction will be lifted |
+| `__build_class__` metaclass escape | High | Metaclass `__init_subclass__`, `__set_name__`, or descriptor protocol methods run outside sandbox tracing |
+| Infinite recursion without stack limit | High | No `sys.setrecursionlimit()` or equivalent — sandboxed code can stack overflow the host |
+
+**Key methodology for Python sandbox audits:**
+
+1. **Map the exception hierarchy**: `BaseException` -> `SystemExit`, `KeyboardInterrupt`, `GeneratorExit` are NOT caught by `except Exception`. Trace every `except` clause in the call chain from sandboxed code to the process boundary.
+
+2. **Verify metering is IMPLEMENTED, not just DESIGNED**: Search for actual `sys.settrace`/`sys.setprofile` calls, actual fuel decrement operations, actual memory tracking. Configuration values that are stored but never checked = HIGH severity.
+
+3. **Trace crash propagation**: When a crash vector is found, determine if the trigger persists across restarts. If the malicious data is in a blockchain/DAG/database and the host re-processes it on restart = permanent boot loop.
+
+4. **Audit builtin exposure**: Compare allowed builtins vs disabled builtins against Python full builtin list. Every `BaseException` subclass in the allowed list is a potential crash vector.
+
+5. **Distinguish compensating controls from code fixes**: Config-based restrictions (address whitelists, feature flags) are NOT code-level fixes. Check code comments and roadmaps for plans to lift restrictions — the vulnerability remains latent.
+
+---
+
 ### PROTOCOL-ARCHITECTURE-SPECIFIC (Always Investigate)
 
 These arise from specific protocol types — always check when the target uses these patterns:
@@ -1122,6 +1153,20 @@ Run this checklist on every in-scope contract / program. Mark each item before c
 [ ] Every TODO/FIXME/HACK comment — does incomplete code have security implications?
 ```
 
+### Python / VM Sandbox Additional Checks
+
+```
+[ ] Every except clause — does it catch BaseException or only Exception? (SystemExit escapes)
+[ ] Every builtin exposed to sandboxed code — is it in the safe set? Check BaseException subclasses
+[ ] Every metering/fuel system — is it actually enforced? (settrace called? fuel decremented?)
+[ ] Every memory limit — is it checked at runtime or just stored?
+[ ] Every AST validator — visit_Raise, visit_Import, visit_Call present? Blacklist complete?
+[ ] Every crash handler — does malicious input persist across restarts? (boot loop?)
+[ ] Every C builtin in sandbox — does it bypass opcode tracing?
+[ ] Every configuration restriction — is it a compensating control or a real fix? Will it be lifted?
+[ ] Every sandbox escape vector — trace full call chain to process boundary
+```
+
 ### False Positive Elimination Gates (Phase 5)
 
 ```
@@ -1160,5 +1205,5 @@ Run this checklist on every in-scope contract / program. Mark each item before c
 
 ---
 
-*Last updated: 2026-03-02 (v3 — added 4.7 External Data Ingestion, 4.8 Cross-Adapter Comparison, 4.9 Config-Dependent Protection, expanded oracle catalog, per-instruction access control matrix, Solana-specific checklist items — post-mortem from missed Kamino ChainlinkX v10 bug)*
+*Last updated: 2026-03-03 (v4 — added Python/VM Sandbox-Specific vulnerability catalog and checklist: exception hierarchy escapes, dead code metering, C-level builtin bypass, boot loop analysis, compensating control vs code fix distinction — from Hathor Network nano contracts audit)*
 *Cross-references: [IMMUNEFI-REPORT-GUIDE.md](IMMUNEFI-REPORT-GUIDE.md) | [all_programs.txt](all_programs.txt) | [audits/](audits/)*
