@@ -4,6 +4,15 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 
 ---
 
+## Reference Guides
+
+| Guide | Purpose |
+|-------|---------|
+| [`AUDIT-AI-RULES.md`](AUDIT-AI-RULES.md) | **AI audit methodology** — full process: scope determination, codebase exploration, multi-angle analysis, exploit development, reporting, repo organization, and complete vulnerability catalog |
+| [`IMMUNEFI-REPORT-GUIDE.md`](IMMUNEFI-REPORT-GUIDE.md) | Report format, PoC requirements, severity classification, submission rules, and negotiation guide |
+
+---
+
 ## Active Audits
 
 | Program | Bounty | Language | Audit Folder | Status |
