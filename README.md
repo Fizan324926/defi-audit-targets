@@ -41,6 +41,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | [Xterio](https://immunefi.com/bug-bounty/xterio/) | $80,000 | Solidity | 0 (clean audit) | [`audits/xterio/`](audits/xterio/findings/AUDIT-REPORT.md) | Complete |
 | [Filecoin](https://immunefi.com/bug-bounty/filecoin/) | $150,000 | Go + Rust | 0 (clean audit) | [`audits/filecoin/`](audits/filecoin/findings/AUDIT-REPORT.md) | Complete |
 | [SushiSwap](https://immunefi.com/bug-bounty/sushiswap/) | $200,000 | Solidity | 1 High, 3 Medium, 5 Low | [`audits/sushiswap/`](audits/sushiswap/findings/AUDIT-REPORT.md) | Complete |
+| [Floe Labs](https://immunefi.com/bug-bounty/floelabs/) | $50,000 | Solidity | 0 (clean audit) | [`audits/floe-labs/`](audits/floe-labs/findings/AUDIT-REPORT.md) | Complete |
 
 ---
 
