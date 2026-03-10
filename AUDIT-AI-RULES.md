@@ -4,6 +4,7 @@ Authoritative rulebook for conducting smart contract and protocol security audit
 
 **Cross-references:**
 - Reporting format → [`IMMUNEFI-REPORT-GUIDE.md`](IMMUNEFI-REPORT-GUIDE.md)
+- Real-world exploit patterns → [`EXPLOIT-REFERENCE.md`](EXPLOIT-REFERENCE.md) **(READ THIS FIRST — 12 zero-day patterns from $77B+ in losses)**
 - Program list → [`all_programs.txt`](all_programs.txt)
 - Audit folders → [`audits/`](audits/)
 
@@ -148,7 +149,14 @@ For large files, track which sections have been analyzed.
 
 ## 4. Phase 3 — Multi-Angle Analysis
 
-Analyze every component from these six angles. Findings emerge from applying multiple angles simultaneously.
+**BEFORE starting analysis, read [`EXPLOIT-REFERENCE.md`](EXPLOIT-REFERENCE.md)** for 12 zero-day patterns extracted from $77B+ in real losses. Pattern-match every code structure against these known attack templates. Key patterns to apply:
+- Pattern 1 (Oracle Inconsistency): Every price feed, every adapter, every multiplier/scaling field
+- Pattern 2 (Missing Health Check): Every function that changes collateral/debt without post-check
+- Pattern 10 (Cross-Protocol Shadow): Every CPI/external call where combined state creates new invariants
+- Pattern 11 (Permissionless Crank): Every instruction accepting external data — who can submit, what can they choose?
+- Pattern 12 (Corporate Action Window): Every RWA/tokenized asset with transition/suspension logic
+
+Analyze every component from these nine angles (original 6 + 3 new critical angles). Findings emerge from applying multiple angles simultaneously.
 
 ### 4.1 Single-File Analysis
 
