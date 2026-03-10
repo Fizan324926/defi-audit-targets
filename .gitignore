@@ -7,3 +7,6 @@ __pycache__/
 # Cloned source repos (too large)
 audits/gmx-synthetics/gmx-synthetics/
 audits/gmx-synthetics/gmx-contracts/
+audits/sparklend/src/
+audits/olympus-v3/src/
+audits/olympus-v3/deployments/
