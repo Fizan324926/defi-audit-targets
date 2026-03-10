@@ -37,6 +37,8 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | [Flamingo Finance](https://immunefi.com/bug-bounty/flamingo-finance/) | $1,000,000 | C# (Neo N3) | 2 Medium | [`audits/flamingo-finance/`](audits/flamingo-finance/findings/AUDIT-REPORT.md) | Complete |
 | [Ref Finance](https://immunefi.com/bug-bounty/reffinance/) | $250,000 | Rust (NEAR) | 2 Medium | [`audits/ref-finance/`](audits/ref-finance/findings/AUDIT-REPORT.md) | Complete |
 | [Hathor Network](https://immunefi.com/bug-bounty/hathornetwork/) | $30,000 | Python + JS | 1 Critical, 2 High, 1 Medium | [`audits/hathor-network/`](audits/hathor-network/findings/AUDIT-REPORT.md) | Complete |
+| [Stellar](https://immunefi.com/bug-bounty/stellar/) | $250,000 | Rust + C++ | 0 (clean audit) | [`audits/stellar/`](audits/stellar/findings/AUDIT-REPORT.md) | Complete |
+| [Xterio](https://immunefi.com/bug-bounty/xterio/) | $80,000 | Solidity | 0 (clean audit) | [`audits/xterio/`](audits/xterio/findings/AUDIT-REPORT.md) | Complete |
 
 ---
 
@@ -76,7 +78,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | 29 | Hathor Network | 001 | **CRITICAL** | SystemExit/KeyboardInterrupt sandbox escape — permanent node crash via nano contract | [Report](audits/hathor-network/findings/IMMUNEFI-SUBMISSION-001.md) |
 | 30 | Hathor Network | 002 | **HIGH** | Fuel metering + memory limits completely unimplemented — infinite loop/OOM DoS | [Report](audits/hathor-network/findings/IMMUNEFI-SUBMISSION-002.md) |
 
-**Total: 1 Critical, 6 High, 2 Medium-High, 19 Medium, 1 Low-Medium across 20 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network + Chainlink + Spark + Merchant Moe: clean audits — 0 findings)
+**Total: 1 Critical, 6 High, 2 Medium-High, 19 Medium, 1 Low-Medium across 22 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network + Chainlink + Spark + Merchant Moe + Stellar + Xterio: clean audits — 0 findings)
 
 ---
 
@@ -512,6 +514,33 @@ DAG-based blockchain with Python nano contracts sandbox. 3 repositories: hathor-
 **Full audit report:** [`AUDIT-REPORT.md`](audits/hathor-network/findings/AUDIT-REPORT.md)
 **Immunefi submissions:** [`IMMUNEFI-SUBMISSION-001.md`](audits/hathor-network/findings/IMMUNEFI-SUBMISSION-001.md), [`IMMUNEFI-SUBMISSION-002.md`](audits/hathor-network/findings/IMMUNEFI-SUBMISSION-002.md)
 **PoC files:** [`scripts/verify/`](audits/hathor-network/scripts/verify/)
+
+### Stellar Protocol — [`audits/stellar/`](audits/stellar/findings/AUDIT-REPORT.md)
+
+Comprehensive smart contract platform audit. 5 repositories: stellar-core (C++ consensus node, DEX engine, Soroban FFI bridge), rs-soroban-env (Rust host environment — WASM sandbox, auth, budget/metering, SAC, storage, crypto), rs-soroban-sdk (Rust developer SDK), wasmi (WASM interpreter fork), rs-stellar-xdr (XDR types). ~417K LOC across Rust and C++. 50+ hypotheses tested across auth bypass, WASM sandbox escape, budget evasion, DEX manipulation, token operations, crypto verification, and PRNG prediction.
+
+**Result: Clean audit — 0 exploitable vulnerabilities found across 50+ hypotheses.**
+
+The protocol demonstrates exceptional defense-in-depth: 5-layer WASM-to-host validation chain (type marshalling + relative/absolute object handles + integrity checks + budget charging + protocol gating), tree-structured authorization with exhausted-once matching and nonce-based replay prevention, RefCell borrow-based reentrancy protection, storage footprint enforcement (pre-declared read/write sets), ChaCha20 CSPRNG with HMAC-SHA256 seed unbiasing and per-frame isolation, 128-bit intermediate arithmetic in DEX engine (bigDivide/hugeDivide), formal mathematical proofs for exchange invariants, verify_strict ed25519 and low-S ECDSA enforcement, and comprehensive budget metering on all operations.
+
+**Low/Informational observations only:**
+
+| Area | Severity | Description |
+|------|----------|-------------|
+| Budget | Low | Fuel rounding loses tiny residual per host boundary crossing |
+| VM | Low | wasmparser re-parse iterates without per-instruction budget check (pre-charged) |
+| VM | Low | Conservative const expression allowlist (correct security approach) |
+| Conversion | Informational | `storage_key_conversion_active` flag not reset on error (no RAII guard) |
+| Host | Informational | Unmetered `can_represent_scval_recursive` walk (acknowledged, scheduled fix) |
+| Budget | Informational | Saturating arithmetic could theoretically undercharge (limit check catches) |
+| VM | Informational | Module cache BTreeMap operations unmetered (bounded by design) |
+| Lifecycle | Informational | Double parsing cost during WASM upload (conservative over-charge) |
+| Budget | Informational | Table growth not budget-charged (hard cap of 1000 entries) |
+| Core | Informational | No explicit constant product post-check (invariant preserved by formula) |
+
+**Full audit report:** [`AUDIT-REPORT.md`](audits/stellar/findings/AUDIT-REPORT.md)
+
+---
 
 ---
 
