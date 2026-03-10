@@ -23,10 +23,12 @@ PoC: SystemExit sandbox escape in Hathor nano contracts.
 Run with: python -m pytest hathor_tests/nanocontracts/test_systemexit_escape.py -s -o "addopts="
 """
 
+import sys
 from io import StringIO
 from textwrap import dedent
 from unittest.mock import Mock
 
+import hathor
 from hathor.conf import HathorSettings
 from hathor.execution_manager import ExecutionManager
 from hathor.nanocontracts import Blueprint, Context, public
@@ -116,18 +118,30 @@ class TestSystemExitEscape(SimulatorTestCase):
         return nc
 
     def test_full_attack(self):
-        # check builtins exposure
-        print(f"\nEXEC_BUILTINS has SystemExit: {'SystemExit' in EXEC_BUILTINS}")
-        print(f"DISABLED_BUILTINS has SystemExit: {'SystemExit' in DISABLED_BUILTINS}")
-        print(f"DISABLED_BUILTINS has exit: {'exit' in DISABLED_BUILTINS}")
+        # environment
+        print(f"\nhathor-core: {hathor.__version__}")
+        print(f"python: {sys.version.split()[0]}")
+        print(f"network: {self._settings.NETWORK_NAME}")
+        print(f"nano_contracts: {self._settings.ENABLE_NANO_CONTRACTS}")
+        print(f"peer_id: {self.manager.my_peer.id}")
+        print(f"rocksdb: {self.manager.tx_storage._rocksdb_storage.path}")
+        print(f"wallet_address: {self.wallet.get_unused_address()}")
+        best = self.manager.tx_storage.get_best_block()
+        print(f"best_block: {best.hash.hex()}")
+        print(f"best_block_height: {best.static_metadata.height}")
+
+        # sandbox builtins
+        print(f"\nSystemExit in EXEC_BUILTINS: {'SystemExit' in EXEC_BUILTINS}")
+        print(f"SystemExit in DISABLED_BUILTINS: {'SystemExit' in DISABLED_BUILTINS}")
+        print(f"exit in DISABLED_BUILTINS: {'exit' in DISABLED_BUILTINS}")
         for name in ('BaseException', 'KeyboardInterrupt', 'GeneratorExit'):
-            print(f"EXEC_BUILTINS has {name}: {name in EXEC_BUILTINS}, "
-                  f"DISABLED_BUILTINS has {name}: {name in DISABLED_BUILTINS}")
+            print(f"{name} in EXEC_BUILTINS: {name in EXEC_BUILTINS}, "
+                  f"in DISABLED_BUILTINS: {name in DISABLED_BUILTINS}")
 
         assert 'SystemExit' in EXEC_BUILTINS
         assert 'SystemExit' not in DISABLED_BUILTINS
 
-        # deploy contract with crash_node() method
+        # deploy contract
         nc_tx = self._gen_nc_tx(self.crash_blueprint_id, 'initialize', [self.token_uid])
         self.manager.cpu_mining_service.resolve(nc_tx)
         self.manager.on_new_tx(nc_tx)
@@ -142,9 +156,9 @@ class TestSystemExitEscape(SimulatorTestCase):
 
         print(f"\nnc_id: {nc_id.hex()}")
         print(f"token_uid: {stored_token.hex()}")
-        print(f"voided_by: {nc_tx.get_metadata().voided_by}")
+        print(f"init_tx voided_by: {nc_tx.get_metadata().voided_by}")
 
-        # send tx calling crash_node()
+        # crash_node() tx
         self.miner.stop()
         self.manager.reactor.advance(10)
         crash_tx = self._gen_nc_tx(nc_id, 'crash_node', [])
@@ -155,11 +169,11 @@ class TestSystemExitEscape(SimulatorTestCase):
         print(f"\ncrash_tx: {crash_tx.hash.hex()}")
         print(f"crash_tx voided_by: {crash_tx.get_metadata().voided_by}")
 
-        # mock crash_and_exit (it calls sys.exit(-1), can't let it kill the process)
+        # mock crash_and_exit (calls sys.exit(-1), can't kill the test process)
         execution_manager_mock = Mock(spec_set=ExecutionManager)
         self.manager.vertex_handler._execution_manager = execution_manager_mock
 
-        # mine block containing crash_tx
+        # mine block with crash_tx
         self.manager.reactor.advance(1)
         block = self.manager.generate_mining_block()
         self.manager.cpu_mining_service.resolve(block)
@@ -174,28 +188,29 @@ class TestSystemExitEscape(SimulatorTestCase):
         assert crash_called
         assert 'on_new_vertex() failed' in reason
 
-        # check DAG persistence
-        block_persisted = self.manager.tx_storage.transaction_exists(block.hash)
-        tx_persisted = self.manager.tx_storage.transaction_exists(crash_tx.hash)
-        block_from_storage = self.manager.tx_storage.get_transaction(block.hash)
-        block_meta = block_from_storage.get_metadata()
+        # DAG persistence after crash
+        block_exists = self.manager.tx_storage.transaction_exists(block.hash)
+        tx_exists = self.manager.tx_storage.transaction_exists(crash_tx.hash)
+        block_from_db = self.manager.tx_storage.get_transaction(block.hash)
+        block_meta = block_from_db.get_metadata()
         voided = block_meta.voided_by or set()
         has_fail_id = self._settings.CONSENSUS_FAIL_ID in voided
 
-        print(f"\nblock in storage: {block_persisted} ({block.hash.hex()[:16]}...)")
-        print(f"crash_tx in storage: {tx_persisted} ({crash_tx.hash.hex()[:16]}...)")
+        print(f"\nblock_hash: {block.hash.hex()}")
+        print(f"block in storage: {block_exists}")
+        print(f"crash_tx in storage: {tx_exists}")
         print(f"block voided_by: {voided}")
         print(f"CONSENSUS_FAIL_ID: {has_fail_id}")
 
-        assert block_persisted
-        assert tx_persisted
+        assert block_exists
+        assert tx_exists
         assert has_fail_id
 
 
 class TestSandboxEscapeControl(BlueprintTestCase):
 
     def test_sandbox_escape_vs_normal_exception(self):
-        # SystemExit through the real NC pipeline
+        # SystemExit through the NC pipeline
         contract_id = self.gen_random_contract_id()
         blueprint_id = self._register_blueprint_contents(StringIO(MALICIOUS_BLUEPRINT_SRC))
         self.runner.create_contract(contract_id, blueprint_id, self.create_context())
@@ -247,25 +262,36 @@ class TestSandboxEscapeControl(BlueprintTestCase):
 ### Output
 
 ```
-EXEC_BUILTINS has SystemExit: True
-DISABLED_BUILTINS has SystemExit: False
-DISABLED_BUILTINS has exit: True
-EXEC_BUILTINS has BaseException: True, DISABLED_BUILTINS has BaseException: False
-EXEC_BUILTINS has KeyboardInterrupt: True, DISABLED_BUILTINS has KeyboardInterrupt: False
-EXEC_BUILTINS has GeneratorExit: True, DISABLED_BUILTINS has GeneratorExit: False
+hathor-core: 0.70.0-ac98edd-local
+python: 3.11.0rc1
+network: unittests
+nano_contracts: enabled
+peer_id: af9fea6df813eb77c2dae61d3f3b6123cfe520d544e1ea0fbe721c6ff5b2cb58
+rocksdb: /tmp/tmpnqgbd5rw
+wallet_address: HKFNZ5gkwkxWhitH6pFKWEFA31AfiHgp8T
+best_block: 2e5ee3d35fbbbcbc1be5201e907a352e75a4a856c193b57ff76f13ea73a9b3c6
+best_block_height: 11
 
-nc_id: 6b8be32abf777976d6742392e96f5f25f88c1077cae791d14c69e8a48819e624
+SystemExit in EXEC_BUILTINS: True
+SystemExit in DISABLED_BUILTINS: False
+exit in DISABLED_BUILTINS: True
+BaseException in EXEC_BUILTINS: True, in DISABLED_BUILTINS: False
+KeyboardInterrupt in EXEC_BUILTINS: True, in DISABLED_BUILTINS: False
+GeneratorExit in EXEC_BUILTINS: True, in DISABLED_BUILTINS: False
+
+nc_id: fb18216b786c86242fe72e052590b77d5b4b4a28b9b52b179a028794c4617e32
 token_uid: 00
-voided_by: None
+init_tx voided_by: None
 
-crash_tx: de3508f404e9f8ae3050aa516af1886d69f9e215fb605a39d5b0e07d6a0d10f4
+crash_tx: 3c747ea2d0678b6394437157f89f8dee1648bde552f74b7ce50f92dd14eba976
 crash_tx voided_by: None
 
 crash_and_exit called: True
-reason: on_new_vertex() failed for tx 36941654620f8d0b9c2fa0916c0353d758daa04508a00db070261141f1c0a8a5
+reason: on_new_vertex() failed for tx aa725cf4ee33f1e45c011660945c1d576882602ebcef3435c9a7690c21ad3c3e
 
-block in storage: True (36941654620f8d0b...)
-crash_tx in storage: True (de3508f404e9f8ae...)
+block_hash: aa725cf4ee33f1e45c011660945c1d576882602ebcef3435c9a7690c21ad3c3e
+block in storage: True
+crash_tx in storage: True
 block voided_by: {b'consensus-fail'}
 CONSENSUS_FAIL_ID: True
 PASSED
@@ -274,5 +300,5 @@ SystemExit escaped sandbox: True
 ValueError caught as NCFail: True
 PASSED
 
-2 passed in 5.26s
+2 passed in 5.11s
 ```

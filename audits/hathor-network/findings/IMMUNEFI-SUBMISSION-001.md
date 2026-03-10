@@ -8,17 +8,25 @@ The whole attack is one line of blueprint code: `raise SystemExit()`. When a min
 
 This is not a one time crash. The block gets saved to RocksDB before the exception even propagates. `_unsafe_save_and_run_consensus` (`vertex_handler.py:229`) calls `save_transaction(vertex)` before `unsafe_update` runs consensus and NC execution at line 232. So the block is in storage before `SystemExit` is raised. The `except BaseException` handler at lines 180-182 then writes `CONSENSUS_FAIL_ID` to the block metadata and calls `save_transaction(vertex, only_metadata=True)` before calling `crash_and_exit` at line 183. Any node syncing this chain receives the same block, processes it through vertex_handler, re-executes the NC code, and crashes the same way.
 
-The PoC runs inside hathor-core's own test framework. I set up a full node via `SimulatorTestCase` (real miner, wallet, RocksDB DAG, consensus, vertex handler), deployed a blueprint with `raise SystemExit()` in a `crash_node()` method, created a contract, mined blocks to confirm it, then sent a transaction calling `crash_node()` and mined a block that includes it. When `propagate_tx` processed the block, `crash_and_exit` was triggered. I then verified that both the block and the malicious transaction are still in RocksDB after the crash, and that the block is marked with `CONSENSUS_FAIL_ID`.
+The PoC runs inside hathor-core's own test framework (v0.70.0). I used `SimulatorTestCase` which spins up a real full node with its own peer ID, RocksDB instance, wallet, miner, consensus engine, and vertex handler. The output starts by dumping the live environment so you can see it's a real node, not a mock:
+
+```
+hathor-core: 0.70.0-ac98edd-local
+network: unittests
+nano_contracts: enabled
+peer_id: af9fea6df813eb77...
+rocksdb: /tmp/tmpnqgbd5rw
+wallet_address: HKFNZ5gkwkxWhitH6pFKWEFA31AfiHgp8T
+best_block_height: 11
+```
+
+First thing I checked was the sandbox builtins. `SystemExit` is in `EXEC_BUILTINS` but not in `DISABLED_BUILTINS`, and same for `BaseException`, `KeyboardInterrupt`, and `GeneratorExit`. Meanwhile `exit` (the function that raises `SystemExit`) is in `DISABLED_BUILTINS`. They blocked the wrapper but left the exception class itself exposed.
+
+I deployed a contract with a `crash_node()` method that just does `raise SystemExit()`, confirmed it on chain (mined 2 blocks, verified `token_uid` stored in contract state, `voided_by: None`), then sent a transaction calling `crash_node()` and mined a block containing it. The output shows `crash_and_exit called: True` with `reason: on_new_vertex() failed for tx ...` -- that's the `except BaseException` handler at `vertex_handler.py:178` catching the escaped `SystemExit` and triggering the crash path.
 
 The only mock is `crash_and_exit` itself, since I can't let `sys.exit(-1)` kill the test process. The mock doesn't affect any of the preceding logic. Looking at `vertex_handler.py:175-183`, the `except BaseException` handler writes `CONSENSUS_FAIL_ID` metadata at lines 180-182 and saves it to RocksDB, then calls `crash_and_exit` at line 183. Those writes happen sequentially before the mock is even reached. The block persistence is even more straightforward: `_unsafe_save_and_run_consensus` at `vertex_handler.py:229` calls `save_transaction(vertex)` synchronously before `unsafe_update` at line 232 runs consensus and NC execution. The block is in RocksDB before `SystemExit` is even raised.
 
-Here's what the PoC output shows:
-
-First I checked the builtins. `SystemExit` is in `EXEC_BUILTINS` but not in `DISABLED_BUILTINS`, and same for `BaseException`, `KeyboardInterrupt`, and `GeneratorExit`. Meanwhile `exit` (the function that raises `SystemExit`) is in `DISABLED_BUILTINS`. They blocked the wrapper but left the exception class itself exposed.
-
-Then I deployed a contract, sent a transaction calling `crash_node()`, and mined a block containing it. The output shows `crash_and_exit called: True` with `reason: on_new_vertex() failed for tx ...` -- that's the `except BaseException` handler at `vertex_handler.py:178` catching the escaped `SystemExit` and triggering the crash path.
-
-After the crash, I checked RocksDB. Both the block and the crash transaction are still in storage, and the block has `voided_by: {b'consensus-fail'}`. This is the `CONSENSUS_FAIL_ID` written at lines 180-182 before `crash_and_exit`. On restart, the node loads this block from storage and re-processes it through vertex handler, hitting the same `SystemExit` -> `crash_and_exit` path. Any node syncing this chain gets the same block and crashes the same way.
+After the crash, I queried RocksDB directly. Both the block and the crash transaction are still in storage, and the block has `voided_by: {b'consensus-fail'}`. This is the `CONSENSUS_FAIL_ID` written at lines 180-182 before `crash_and_exit`. On restart, the node loads this block from storage and re-processes it through vertex handler, hitting the same `SystemExit` -> `crash_and_exit` path. Any node syncing this chain gets the same block and crashes the same way.
 
 The second test is a control comparison. I ran `raise SystemExit()` and `raise ValueError()` through the same NC pipeline (`Runner.call_public_method`). `SystemExit` escapes the sandbox entirely, while `ValueError` gets caught by `metered_exec.py:107` and wrapped as `NCFail`. That's the gap: `except Exception` catches `ValueError` (which inherits from `Exception`) but not `SystemExit` (which inherits from `BaseException`).
 

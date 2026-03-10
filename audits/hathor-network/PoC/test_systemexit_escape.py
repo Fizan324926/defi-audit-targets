@@ -3,10 +3,12 @@ PoC: SystemExit sandbox escape in Hathor nano contracts.
 Run with: python -m pytest hathor_tests/nanocontracts/test_systemexit_escape.py -s -o "addopts="
 """
 
+import sys
 from io import StringIO
 from textwrap import dedent
 from unittest.mock import Mock
 
+import hathor
 from hathor.conf import HathorSettings
 from hathor.execution_manager import ExecutionManager
 from hathor.nanocontracts import Blueprint, Context, public
@@ -96,18 +98,30 @@ class TestSystemExitEscape(SimulatorTestCase):
         return nc
 
     def test_full_attack(self):
-        # check builtins exposure
-        print(f"\nEXEC_BUILTINS has SystemExit: {'SystemExit' in EXEC_BUILTINS}")
-        print(f"DISABLED_BUILTINS has SystemExit: {'SystemExit' in DISABLED_BUILTINS}")
-        print(f"DISABLED_BUILTINS has exit: {'exit' in DISABLED_BUILTINS}")
+        # environment
+        print(f"\nhathor-core: {hathor.__version__}")
+        print(f"python: {sys.version.split()[0]}")
+        print(f"network: {self._settings.NETWORK_NAME}")
+        print(f"nano_contracts: {self._settings.ENABLE_NANO_CONTRACTS}")
+        print(f"peer_id: {self.manager.my_peer.id}")
+        print(f"rocksdb: {self.manager.tx_storage._rocksdb_storage.path}")
+        print(f"wallet_address: {self.wallet.get_unused_address()}")
+        best = self.manager.tx_storage.get_best_block()
+        print(f"best_block: {best.hash.hex()}")
+        print(f"best_block_height: {best.static_metadata.height}")
+
+        # sandbox builtins
+        print(f"\nSystemExit in EXEC_BUILTINS: {'SystemExit' in EXEC_BUILTINS}")
+        print(f"SystemExit in DISABLED_BUILTINS: {'SystemExit' in DISABLED_BUILTINS}")
+        print(f"exit in DISABLED_BUILTINS: {'exit' in DISABLED_BUILTINS}")
         for name in ('BaseException', 'KeyboardInterrupt', 'GeneratorExit'):
-            print(f"EXEC_BUILTINS has {name}: {name in EXEC_BUILTINS}, "
-                  f"DISABLED_BUILTINS has {name}: {name in DISABLED_BUILTINS}")
+            print(f"{name} in EXEC_BUILTINS: {name in EXEC_BUILTINS}, "
+                  f"in DISABLED_BUILTINS: {name in DISABLED_BUILTINS}")
 
         assert 'SystemExit' in EXEC_BUILTINS
         assert 'SystemExit' not in DISABLED_BUILTINS
 
-        # deploy contract with crash_node() method
+        # deploy contract
         nc_tx = self._gen_nc_tx(self.crash_blueprint_id, 'initialize', [self.token_uid])
         self.manager.cpu_mining_service.resolve(nc_tx)
         self.manager.on_new_tx(nc_tx)
@@ -122,9 +136,9 @@ class TestSystemExitEscape(SimulatorTestCase):
 
         print(f"\nnc_id: {nc_id.hex()}")
         print(f"token_uid: {stored_token.hex()}")
-        print(f"voided_by: {nc_tx.get_metadata().voided_by}")
+        print(f"init_tx voided_by: {nc_tx.get_metadata().voided_by}")
 
-        # send tx calling crash_node()
+        # crash_node() tx
         self.miner.stop()
         self.manager.reactor.advance(10)
         crash_tx = self._gen_nc_tx(nc_id, 'crash_node', [])
@@ -135,11 +149,11 @@ class TestSystemExitEscape(SimulatorTestCase):
         print(f"\ncrash_tx: {crash_tx.hash.hex()}")
         print(f"crash_tx voided_by: {crash_tx.get_metadata().voided_by}")
 
-        # mock crash_and_exit (it calls sys.exit(-1), can't let it kill the process)
+        # mock crash_and_exit (calls sys.exit(-1), can't kill the test process)
         execution_manager_mock = Mock(spec_set=ExecutionManager)
         self.manager.vertex_handler._execution_manager = execution_manager_mock
 
-        # mine block containing crash_tx
+        # mine block with crash_tx
         self.manager.reactor.advance(1)
         block = self.manager.generate_mining_block()
         self.manager.cpu_mining_service.resolve(block)
@@ -154,28 +168,29 @@ class TestSystemExitEscape(SimulatorTestCase):
         assert crash_called
         assert 'on_new_vertex() failed' in reason
 
-        # check DAG persistence
-        block_persisted = self.manager.tx_storage.transaction_exists(block.hash)
-        tx_persisted = self.manager.tx_storage.transaction_exists(crash_tx.hash)
-        block_from_storage = self.manager.tx_storage.get_transaction(block.hash)
-        block_meta = block_from_storage.get_metadata()
+        # DAG persistence after crash
+        block_exists = self.manager.tx_storage.transaction_exists(block.hash)
+        tx_exists = self.manager.tx_storage.transaction_exists(crash_tx.hash)
+        block_from_db = self.manager.tx_storage.get_transaction(block.hash)
+        block_meta = block_from_db.get_metadata()
         voided = block_meta.voided_by or set()
         has_fail_id = self._settings.CONSENSUS_FAIL_ID in voided
 
-        print(f"\nblock in storage: {block_persisted} ({block.hash.hex()[:16]}...)")
-        print(f"crash_tx in storage: {tx_persisted} ({crash_tx.hash.hex()[:16]}...)")
+        print(f"\nblock_hash: {block.hash.hex()}")
+        print(f"block in storage: {block_exists}")
+        print(f"crash_tx in storage: {tx_exists}")
         print(f"block voided_by: {voided}")
         print(f"CONSENSUS_FAIL_ID: {has_fail_id}")
 
-        assert block_persisted
-        assert tx_persisted
+        assert block_exists
+        assert tx_exists
         assert has_fail_id
 
 
 class TestSandboxEscapeControl(BlueprintTestCase):
 
     def test_sandbox_escape_vs_normal_exception(self):
-        # SystemExit through the real NC pipeline
+        # SystemExit through the NC pipeline
         contract_id = self.gen_random_contract_id()
         blueprint_id = self._register_blueprint_contents(StringIO(MALICIOUS_BLUEPRINT_SRC))
         self.runner.create_contract(contract_id, blueprint_id, self.create_context())
