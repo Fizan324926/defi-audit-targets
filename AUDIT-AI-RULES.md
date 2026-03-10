@@ -16,11 +16,12 @@ Authoritative rulebook for conducting smart contract and protocol security audit
 3. [Phase 2 — Full Codebase Exploration](#3-phase-2--full-codebase-exploration)
 4. [Phase 3 — Multi-Angle Analysis](#4-phase-3--multi-angle-analysis)
 5. [Phase 4 — Finding Verification](#5-phase-4--finding-verification)
-6. [Phase 5 — Exploit Development](#6-phase-5--exploit-development)
-7. [Phase 6 — Report Writing](#7-phase-6--report-writing)
-8. [Phase 7 — Repository Organization](#8-phase-7--repository-organization)
-9. [Vulnerability Catalog](#9-vulnerability-catalog)
-10. [Auditor Quick-Reference Checklist](#10-auditor-quick-reference-checklist)
+6. [Phase 5 — False Positive Elimination](#6-phase-5--false-positive-elimination)
+7. [Phase 6 — Exploit Development](#7-phase-6--exploit-development)
+8. [Phase 7 — Report Writing & Immunefi Submission](#8-phase-7--report-writing--immunefi-submission)
+9. [Phase 8 — Repository Organization](#9-phase-8--repository-organization)
+10. [Vulnerability Catalog](#10-vulnerability-catalog)
+11. [Auditor Quick-Reference Checklist](#11-auditor-quick-reference-checklist)
 
 ---
 
@@ -248,9 +249,175 @@ Use the target's reward tiers. For Immunefi standard:
 
 ---
 
-## 6. Phase 6 — Exploit Development
+## 6. Phase 5 — False Positive Elimination
 
-### 6.1 When to Write a Full Exploit
+**This is the most critical phase.** More than 95% of initial findings are false positives. Every finding MUST survive ALL of the following elimination filters before proceeding to exploit development. If a finding fails ANY filter, mark it FALSE POSITIVE with the specific reason and move on.
+
+### 6.1 Feasibility Kill Switches — Instant Rejection
+
+Reject immediately if ANY of these apply:
+
+| Kill Switch | Rule | Example from Real Audits |
+|-------------|------|--------------------------|
+| **Astronomical precondition** | If exploit requires accumulating impossible amounts (>total supply, >100 years of volume), it will NEVER happen | Orca H-02: overflow needs 18.4 trillion USDC in uncollected fees — infeasible |
+| **Admin-only trigger** | If only a trusted admin/owner/multisig can trigger the bug, it's centralization risk — most programs exclude this | Orca H-01: requires admin key to set bad parameters — out of scope |
+| **Heat death timescale** | If the bug requires >1 billion transactions, >100 years, or >2^128 operations to trigger | Optimism: nonce overflow needs 2^240 transactions — physically impossible |
+| **Zero net profit** | If the attack costs more (gas, capital, opportunity cost) than it extracts, no rational attacker would do it | Many DoS vectors: attacker pays gas but gains nothing |
+| **Requires broken external dependency** | If the bug only triggers when Chainlink/Uniswap/Ethereum itself is broken, that's the dependency's bug | "If the oracle returns 0" — Chainlink has its own safeguards |
+
+### 6.2 Defense Verification — Check ALL Existing Protections
+
+Before reporting, systematically verify that NO existing defense prevents exploitation:
+
+```
+[ ] Access control: Is there a modifier/require/assert that blocks the attack path?
+[ ] Reentrancy guard: Is there a lock, sentinel value, or checks-effects-interactions?
+[ ] Invariant maintenance: Does a separate check/function maintain the invariant elsewhere?
+[ ] Economic guard: Is there a minimum deposit, bond, or fee that makes the attack unprofitable?
+[ ] Timelock/delay: Is there a waiting period that allows intervention?
+[ ] Pause mechanism: Would the protocol's pause/guardian catch this before damage?
+[ ] Type safety: Does the type system (uint256, Solidity 0.8 overflow checks) prevent it?
+[ ] Boundary clamping: Is the value clamped, saturated, or bounded elsewhere?
+[ ] Upstream validation: Does a caller higher in the call stack validate the input?
+[ ] Downstream resilience: Does the consumer of the output handle the bad value safely?
+```
+
+### 6.3 Common False Positive Patterns — Learn to Recognize These
+
+These patterns produce findings that LOOK real but ARE NOT. Eliminate instantly when recognized.
+
+#### A. "Theoretical Overflow" (Most Common FP)
+
+**Pattern**: "This uint64/uint128/uint256 can overflow if..."
+
+**Reality check**:
+- `uint256` overflow requires values >1.15e77 — impossible for any economic quantity
+- `uint128` overflow requires values >3.4e38 — impossible for any token amount in existence
+- `uint64` overflow requires values >1.8e19 — only possible for wei-denominated counters with extreme throughput
+- Solidity 0.8+ reverts on overflow by default — wrapping only in `unchecked{}` blocks
+- Rust with `overflow-checks = true` panics on overflow — wrapping only with `wrapping_*` methods
+
+**Only report overflow if**: the value is a persistent accumulator, the type is realistically reachable, AND overflow-checks are disabled.
+
+#### B. "Admin Can Rug" (Centralization Risk)
+
+**Pattern**: "The owner can set X to a malicious value, draining all funds"
+
+**Rejection criteria**:
+- Most Immunefi programs explicitly exclude "centralization risk" and "admin privilege" issues
+- If the function requires `onlyOwner`, `onlyAdmin`, or a governance multisig, it is a TRUSTED role
+- Only report if: the admin action has no timelock AND contradicts the protocol's documented trust model AND the program does NOT exclude admin issues
+
+#### C. "Division by Zero" / "Empty State Panic"
+
+**Pattern**: "If the pool is empty / totalSupply is 0 / denominator is 0, this reverts"
+
+**Reality check**:
+- Most protocols initialize with non-zero values or check for zero before dividing
+- A revert on empty state is often CORRECT behavior (fail-safe, not a bug)
+- Only report if: the zero state is REACHABLE in production AND the revert causes permanent fund lock (not just a failed transaction)
+
+#### D. "Best Practice Critique" (Not a Vulnerability)
+
+**Pattern**: "This should use X instead of Y" / "Missing event emission" / "panic! instead of Error"
+
+**Rejection criteria**:
+- Many programs (especially Primacy of Rules) explicitly exclude "best practice critiques"
+- If there is no financial impact to users/LPs/protocol, it is not a vulnerability
+- Missing events, style issues, gas optimizations, and code organization are NEVER submittable
+
+#### E. "Struct Size Mismatch" / "Schema Evolution"
+
+**Pattern**: "If this struct grows beyond N bytes, the code will panic"
+
+**Reality check**:
+- Check if reserved/padding bytes prevent growth beyond the limit
+- Check if the struct has fixed-size fields that can never change
+- If the struct is compile-time fixed, the mismatch is unreachable
+
+#### F. "First-Depositor Attack" (Already Mitigated)
+
+**Pattern**: "Classic ERC-4626 share inflation on empty vault"
+
+**Reality check**:
+- Check for virtual offset (`_decimalsOffset()` in OpenZeppelin 4.9+)
+- Check for minimum deposit requirements
+- Check for dead shares minted to zero address during initialization
+- Most modern vaults have at least one mitigation — verify ALL are absent before reporting
+
+#### G. "Reentrancy" (Already Guarded)
+
+**Pattern**: "External call before state update — classic reentrancy"
+
+**Reality check**:
+- Check for `nonReentrant` modifier (OpenZeppelin ReentrancyGuard)
+- Check for sentinel value pattern (e.g., Optimism's `l2Sender`/`xDomainMsgSender`)
+- Check for transient storage guards (EIP-1153)
+- Check for checks-effects-interactions even if not obvious (state may be updated in a different way)
+- ETH-only protocols on chains without ERC-777 may be safe from token callback reentrancy
+
+#### H. "On-Chain/Off-Chain Divergence" (VMs, Oracles)
+
+**Pattern**: "If the on-chain VM handles X differently than the off-chain VM..."
+
+**Reality check**:
+- Read BOTH implementations (Go/Rust off-chain AND Solidity on-chain)
+- Check the test suite for parity tests
+- If both implementations match (both panic, both return 0, both revert), there is no divergence
+- Optimism lesson: division-by-zero handling matched perfectly across on-chain/off-chain VMs
+
+#### I. "DoS via Gas" (Usually Not Submittable)
+
+**Pattern**: "An attacker can make this function consume too much gas"
+
+**Reality check**:
+- If the attacker pays their own gas, it's self-griefing
+- If the array/loop is only iterable by the affected user, it's user-griefing (their own fault)
+- Only report if: the DoS affects OTHER users, is permanent or long-lasting, AND the attacker profits or pays negligible cost
+
+#### J. "Ordering / Timing" (Check If By Design)
+
+**Pattern**: "If function A is called before function B, bad things happen"
+
+**Reality check**:
+- Check if the protocol documents the expected call order
+- Check if there are guards that enforce ordering (state machine, flags, timestamps)
+- Check if the "bad" outcome is actually acceptable (failed transaction, not fund loss)
+- Only report if: the misordering is reachable in normal usage AND causes financial impact
+
+### 6.4 Severity Downgrade Rules
+
+Even confirmed bugs may not be submittable. Apply these downgrades:
+
+| Condition | Severity Adjustment |
+|-----------|-------------------|
+| Requires admin/privileged action to trigger | OUT OF SCOPE (most programs) |
+| Temporary DoS only, no fund loss | Maximum: Medium (usually Low) |
+| Funds recoverable via admin action within reasonable time | Downgrade one tier |
+| Requires front-running with precise timing | Downgrade if MEV is excluded |
+| Only affects attacker's own funds | NOT A VULNERABILITY |
+| Requires > $1M in capital with < $100 profit | NOT ECONOMICALLY VIABLE |
+| Requires protocol to be in a rare emergency state | Downgrade one tier |
+| Impact is informational only (events, logging, display) | NOT SUBMITTABLE |
+
+### 6.5 The Final Test — Would YOU Attack This?
+
+Before writing the report, honestly answer:
+
+1. **If you had unlimited capital and technical skill, would you actually execute this attack?**
+   - If no → it's not a real vulnerability
+2. **Would a rational economic actor spend time building this exploit?**
+   - If the profit is < $1,000, probably not (unless it's a Critical mechanism bug)
+3. **Has this exact pattern been found and reported before in this protocol?**
+   - Check past Immunefi reports, Code4rena findings, and Sherlock audits for the same codebase
+4. **Does the developer's own comment suggest they're aware of this?**
+   - If there's a `// NOTE:`, `// SAFETY:`, or `// INVARIANT:` comment addressing it, it's likely known
+
+---
+
+## 7. Phase 6 — Exploit Development
+
+### 7.1 When to Write a Full Exploit
 
 Write a complete working exploit for:
 - All Critical findings
@@ -259,7 +426,7 @@ Write a complete working exploit for:
 
 For Low findings where impact is clear and mechanism is simple, a PoC script that demonstrates the vulnerable state is sufficient.
 
-### 6.2 Exploit Environment
+### 7.2 Exploit Environment
 
 Choose the appropriate environment based on what the code runs on:
 
@@ -278,7 +445,7 @@ Choose the appropriate environment based on what the code runs on:
 - Rust test harness for Solana program unit tests
 - Node.js (ethers.js, viem) for EVM interaction scripts
 
-### 6.3 Exploit File Naming
+### 7.3 Exploit File Naming
 
 ```
 audits/<target>/exploits/<VULN-ID>-<short-name>.md       # writeup
@@ -286,7 +453,7 @@ audits/<target>/scripts/<VULN-ID>-exploit.<ext>          # runnable code
 audits/<target>/scripts/verify/<VULN-ID>-verify.<ext>    # verification only
 ```
 
-### 6.4 Exploit Writeup Structure
+### 7.4 Exploit Writeup Structure
 
 Each exploit file (`exploits/<VULN-ID>-<name>.md`) must contain:
 
@@ -301,7 +468,7 @@ Each exploit file (`exploits/<VULN-ID>-<name>.md`) must contain:
 8. Fix: minimal code change that eliminates the vulnerability
 ```
 
-### 6.5 Attack Parameter Optimization
+### 7.5 Attack Parameter Optimization
 
 When the exploit has tunable parameters, find the optimal values:
 
@@ -320,15 +487,15 @@ print(f"Max profit: {profit.value[0]}")
 
 ---
 
-## 7. Phase 6 — Report Writing
+## 8. Phase 7 — Report Writing & Immunefi Submission
 
-### 7.1 One Report Per Vulnerability
+### 8.1 One Report Per Vulnerability
 
 Each finding gets its own file: `audits/<target>/findings/<ID>-<slug>.md`
 
 **NEVER bundle multiple vulnerabilities into one report.**
 
-### 7.2 Required Report Sections
+### 8.2 Required Report Sections
 
 Follow the full format from [`IMMUNEFI-REPORT-GUIDE.md`](IMMUNEFI-REPORT-GUIDE.md):
 
@@ -369,7 +536,7 @@ Explain each step in plain English.
 Minimal code diff that eliminates the vulnerability. No refactoring.
 ```
 
-### 7.3 What Makes a Report Submittable
+### 8.3 What Makes a Report Submittable
 
 - [ ] Severity matches Immunefi program's reward tier criteria
 - [ ] Finding is in scope (asset + vulnerability type)
@@ -378,12 +545,77 @@ Minimal code diff that eliminates the vulnerability. No refactoring.
 - [ ] No existing defense prevents the exploit
 - [ ] Fix is included
 - [ ] No duplicate of existing public disclosure
+- [ ] Passed ALL false positive elimination filters (Phase 5)
+
+### 8.4 Immunefi Submission-Ready Report (MANDATORY)
+
+For **every confirmed vulnerability**, produce a **ready-to-submit Immunefi report** saved as:
+
+```
+audits/<target>/findings/IMMUNEFI-SUBMISSION-<ID>.md
+```
+
+This file must be **copy-paste ready** for the Immunefi submission form. It must contain ALL of the following:
+
+#### Required Sections
+
+| Section | Content | Notes |
+|---------|---------|-------|
+| **Bug Description** | Clear summary, vulnerable code with exact file paths and line numbers, call chain analysis, comparison with correct behavior (if applicable) | Show the code, not just describe it |
+| **Impact** | Severity classification per Immunefi tiers, financial impact estimate with math, affected user classes | Quantify in USD at current prices |
+| **Risk Breakdown** | Difficulty to exploit, weakness type (CWE ID), CVSS score | Use standard classifications |
+| **Recommendation** | Concrete fix as a diff (`-` old / `+` new) | Minimal change only |
+| **Proof of Concept** | Working Foundry/Anchor/Python test that demonstrates the actual impact | Must be runnable on local fork |
+| **References** | Direct links to affected source files on GitHub with line numbers | Use permalink format |
+
+#### PoC Requirements
+
+The PoC MUST:
+- Run locally — no mainnet/testnet interaction
+- Demonstrate the actual bug impact, not just a theoretical state
+- Include clear setup, exploit steps, and assertions with descriptive names
+- Be saved BOTH inline in the submission report AND as a standalone file:
+  ```
+  audits/<target>/scripts/verify/PoC_<ID>_<name>.sol   (Solidity/Foundry)
+  audits/<target>/scripts/verify/PoC_<ID>_<name>.py     (Python)
+  audits/<target>/scripts/verify/PoC_<ID>_<name>.rs     (Rust/Anchor)
+  ```
+- Use self-documenting variable names: `attacker`, `victim`, `honestChallenger`, etc.
+- Include comments explaining each step of the attack
+
+#### Example Submission Structure
+
+```markdown
+# Bug Description
+[Clear explanation with vulnerable code snippets and line references]
+
+# Impact
+[Severity, financial estimate, affected users]
+
+# Risk Breakdown
+[Difficulty, CWE, CVSS]
+
+# Recommendation
+[Diff showing the fix]
+
+# Proof of Concept
+[Foundry/Hardhat test code, inline]
+
+## Running the PoC
+[Exact commands to run]
+
+## Expected Output
+[What the test output looks like]
+
+# References
+[GitHub links to affected files]
+```
 
 ---
 
-## 8. Phase 7 — Repository Organization
+## 9. Phase 8 — Repository Organization
 
-### 8.1 Folder Structure Per Target
+### 9.1 Folder Structure Per Target
 
 ```
 audits/<target>/
@@ -401,7 +633,7 @@ audits/<target>/
         └── <ID>-<slug>.md
 ```
 
-### 8.2 Root README Updates
+### 9.2 Root README Updates
 
 After each audit add/update a row in the root `README.md`:
 - Active audits table: program, bounty, language, folder link, status
@@ -414,7 +646,7 @@ The root README is the single source of truth for:
 - Risk/impact summary for each finding
 - Links to all exploit writeups and scripts
 
-### 8.3 Audit README Requirements
+### 9.3 Audit README Requirements
 
 Each `audits/<target>/README.md` must contain:
 - Program overview (protocol description, TVL, chain, bounty size)
@@ -427,7 +659,7 @@ Each `audits/<target>/README.md` must contain:
 
 ---
 
-## 9. Vulnerability Catalog
+## 10. Vulnerability Catalog
 
 This catalog is a starting point — it is **not exhaustive**. Always analyze based on the specific architecture, language, and code patterns present. Novel vulnerabilities unique to a protocol's design are often the highest-value findings.
 
@@ -435,7 +667,7 @@ This catalog is a starting point — it is **not exhaustive**. Always analyze ba
 
 ### TIER 1: CRITICAL ($50K–$15M) — Direct Fund Loss
 
-#### 9.1 Reentrancy
+#### 10.1 Reentrancy
 
 **What to grep for:** `.call{value:`, `.transfer(`, `safeTransfer(`, `safeTransferFrom(`
 
@@ -457,7 +689,7 @@ function withdraw(uint amount) external {
 
 ---
 
-#### 9.2 Access Control Missing or Wrong
+#### 10.2 Access Control Missing or Wrong
 
 **What to grep for:** `onlyOwner`, `onlyAdmin`, `require(msg.sender`, `_checkRole`, `initialize(`, `__init__`
 
@@ -478,7 +710,7 @@ function setOracle(address _oracle) external {  // missing onlyOwner
 
 ---
 
-#### 9.3 Unchecked External Call Return Values
+#### 10.3 Unchecked External Call Return Values
 
 **What to grep for:** `.transfer(`, `.send(`, `.call(`, `approve(`, `IERC20(`
 
@@ -491,7 +723,7 @@ function setOracle(address _oracle) external {  // missing onlyOwner
 
 ---
 
-#### 9.4 Oracle Misuse
+#### 10.4 Oracle Misuse
 
 **What to grep for:** `latestRoundData`, `latestAnswer`, `getPrice`, `getReserves`, `slot0`, `observe`
 
@@ -507,7 +739,7 @@ function setOracle(address _oracle) external {  // missing onlyOwner
 
 ---
 
-#### 9.5 Arithmetic / Precision Errors
+#### 10.5 Arithmetic / Precision Errors
 
 **What to grep for:** `/`, `*`, `unchecked`, `uint128(`, `uint96(`, `uint64(`, `type(uint`, `1e18`, `PRECISION`, `WAD`, `RAY`
 
@@ -536,7 +768,7 @@ When `overflow-checks = false`, every plain `+=`, `-=`, `*=` on primitives wraps
 
 ---
 
-#### 9.6 ERC-4626 / Vault Inflation Attack (First Depositor)
+#### 10.6 ERC-4626 / Vault Inflation Attack (First Depositor)
 
 **What to grep for:** `totalSupply == 0`, `totalAssets`, `convertToShares`, `deposit`, `mint`, `previewDeposit`
 
@@ -557,7 +789,7 @@ function convertToShares(uint256 assets) public view returns (uint256) {
 
 ---
 
-#### 9.7 Signature Verification Flaws
+#### 10.7 Signature Verification Flaws
 
 **What to grep for:** `ecrecover`, `ECDSA`, `EIP712`, `permit`, `nonce`, `deadline`
 
@@ -573,7 +805,7 @@ function convertToShares(uint256 assets) public view returns (uint256) {
 
 ---
 
-#### 9.8 Token Accounting Mismatches
+#### 10.8 Token Accounting Mismatches
 
 **What to grep for:** `balanceOf`, `transfer(`, `transferFrom(`, `amount`, `_mint`, `_burn`
 
@@ -595,7 +827,7 @@ function deposit(uint256 amount) external {
 
 ### TIER 2: HIGH ($10K–$250K) — Conditional Fund Loss / Protocol Disruption
 
-#### 9.9 Liquidation Logic Errors
+#### 10.9 Liquidation Logic Errors
 
 **What to grep for:** `liquidat`, `healthFactor`, `collateral`, `issolvent`, `LTV`, `threshold`
 
@@ -608,7 +840,7 @@ function deposit(uint256 amount) external {
 
 ---
 
-#### 9.10 Flash Loan Integration Errors
+#### 10.10 Flash Loan Integration Errors
 
 **What to grep for:** `flashLoan`, `flashMint`, `callback`, `balanceOf.*==.*before`
 
@@ -621,7 +853,7 @@ function deposit(uint256 amount) external {
 
 ---
 
-#### 9.11 Proxy Storage Layout Bugs
+#### 10.11 Proxy Storage Layout Bugs
 
 **What to grep for:** `__gap`, `Initializable`, `upgradeTo`, `delegatecall`, `IMPLEMENTATION_SLOT`
 
@@ -634,7 +866,7 @@ function deposit(uint256 amount) external {
 
 ---
 
-#### 9.12 Cross-Chain Message Validation (Bridges)
+#### 10.12 Cross-Chain Message Validation (Bridges)
 
 **What to grep for:** `_lzReceive`, `onMessage`, `executeMessage`, `srcChainId`, `trustedRemote`
 
@@ -657,7 +889,7 @@ function _lzReceive(uint16 srcChainId, bytes memory srcAddress,
 
 ---
 
-#### 9.13 Slippage / Deadline Missing
+#### 10.13 Slippage / Deadline Missing
 
 **What to grep for:** `amountOutMin`, `deadline`, `block.timestamp`, `swap(`, `exactInput`
 
@@ -670,7 +902,7 @@ function _lzReceive(uint16 srcChainId, bytes memory srcAddress,
 
 ---
 
-#### 9.14 Denial of Service (Permanent State Lock)
+#### 10.14 Denial of Service (Permanent State Lock)
 
 **What to grep for:** `for (`, `while (`, `.length`, `push(`, `delete`, `selfdestruct`
 
@@ -686,7 +918,7 @@ function _lzReceive(uint16 srcChainId, bytes memory srcAddress,
 
 ### TIER 3: MEDIUM ($1K–$50K) — Limited Impact
 
-#### 9.15 Event / State Inconsistency
+#### 10.15 Event / State Inconsistency
 
 | Pattern | Where It Hides |
 |---------|---------------|
@@ -696,7 +928,7 @@ function _lzReceive(uint16 srcChainId, bytes memory srcAddress,
 
 ---
 
-#### 9.16 Frontrunning in Privileged Operations
+#### 10.16 Frontrunning in Privileged Operations
 
 | Pattern | Where It Hides |
 |---------|---------------|
@@ -706,7 +938,7 @@ function _lzReceive(uint16 srcChainId, bytes memory srcAddress,
 
 ---
 
-#### 9.17 Incorrect Interface Implementation
+#### 10.17 Incorrect Interface Implementation
 
 | Pattern | Where It Hides |
 |---------|---------------|
@@ -754,7 +986,7 @@ These arise from specific protocol types — always check when the target uses t
 
 ---
 
-## 10. Auditor Quick-Reference Checklist
+## 11. Auditor Quick-Reference Checklist
 
 Run this checklist on every in-scope contract / program. Mark each item before considering audit complete.
 
@@ -792,21 +1024,43 @@ Run this checklist on every in-scope contract / program. Mark each item before c
 [ ] Anchor discriminator checks — present for account type validation?
 ```
 
+### False Positive Elimination Gates (Phase 5)
+
+```
+[ ] NOT an astronomical precondition (requires >total supply, >100 years, >2^128 ops)
+[ ] NOT admin-only trigger (requires trusted multisig/owner action)
+[ ] NOT zero net profit for attacker (costs more than it extracts)
+[ ] NOT a broken external dependency issue (Chainlink/Uniswap/L1 itself)
+[ ] NOT a "best practice critique" (style, events, gas, code org)
+[ ] NOT theoretical overflow in uint256/uint128 with realistic inputs
+[ ] NOT reentrancy with existing guard (ReentrancyGuard, sentinel, tstore)
+[ ] NOT vault inflation with existing mitigation (virtual offset, dead shares, min deposit)
+[ ] NOT division-by-zero in unreachable empty state
+[ ] NOT struct size mismatch with fixed-size padding
+[ ] NOT self-griefing DoS (attacker pays own gas, no one else affected)
+[ ] NOT ordering issue that's documented as intentional design
+[ ] Checked ALL 10 defense verification items (access control through downstream resilience)
+[ ] Passed the "Would YOU attack this?" gut check
+```
+
 ### Pre-Report Gates
 
 ```
 [ ] Vulnerable code path confirmed in production (not test/dev)
 [ ] No existing defense blocks the attack
+[ ] Passed ALL false positive elimination gates above
 [ ] PoC script written and passes
 [ ] Impact quantified in USD
 [ ] Severity matches program's reward tier criteria
 [ ] Asset and vulnerability type are in scope
 [ ] Report follows IMMUNEFI-REPORT-GUIDE.md format
+[ ] Immunefi submission-ready report created (IMMUNEFI-SUBMISSION-<ID>.md)
+[ ] Standalone PoC file created (PoC_<ID>_<name>.sol/py/rs)
 [ ] Root README updated with finding
 [ ] Exploit writeup in audits/<target>/findings/exploits/
 ```
 
 ---
 
-*Last updated: 2026-03-01*
+*Last updated: 2026-03-01 (v2 — added Phase 5 False Positive Elimination + Immunefi Submission Output)*
 *Cross-references: [IMMUNEFI-REPORT-GUIDE.md](IMMUNEFI-REPORT-GUIDE.md) | [all_programs.txt](all_programs.txt) | [audits/](audits/)*
