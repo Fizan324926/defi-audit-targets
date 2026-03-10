@@ -35,6 +35,8 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | [Merchant Moe (LFJ)](https://immunefi.com/bug-bounty/merchantmoe/) | $100,000 | Solidity | 0 (clean audit) | [`audits/merchant-moe/`](audits/merchant-moe/findings/AUDIT-REPORT.md) | Complete |
 | [OpenZeppelin](https://immunefi.com/bug-bounty/openzeppelin/) | $500,000 | Solidity | 2 High, 4 Medium | [`audits/openzeppelin/`](audits/openzeppelin/findings/AUDIT-REPORT.md) | Complete |
 | [Flamingo Finance](https://immunefi.com/bug-bounty/flamingo-finance/) | $1,000,000 | C# (Neo N3) | 2 Medium | [`audits/flamingo-finance/`](audits/flamingo-finance/findings/AUDIT-REPORT.md) | Complete |
+| [Ref Finance](https://immunefi.com/bug-bounty/reffinance/) | $250,000 | Rust (NEAR) | 2 Medium | [`audits/ref-finance/`](audits/ref-finance/findings/AUDIT-REPORT.md) | Complete |
+| [Hathor Network](https://immunefi.com/bug-bounty/hathornetwork/) | $30,000 | Python + JS | 1 Critical, 2 High, 2 Medium | [`audits/hathor-network/`](audits/hathor-network/findings/AUDIT-REPORT.md) | Complete |
 
 ---
 
@@ -70,8 +72,11 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | 25 | OpenZeppelin | 002 | **HIGH** | VotesConfidential FHE.sub underflow — voting power wrap-around via modular arithmetic | [Report](audits/openzeppelin/findings/IMMUNEFI-SUBMISSION-002.md) |
 | 26 | Flamingo | 001 | **MEDIUM** | ProxySwapTokenInForTokenOut checks LP balance instead of input token — swap DoS | [Report](audits/flamingo-finance/findings/IMMUNEFI-SUBMISSION-001.md) |
 | 27 | Flamingo | 002 | **MEDIUM** | Staking profit rate integer division truncation — permanent reward loss | [Report](audits/flamingo-finance/findings/IMMUNEFI-SUBMISSION-002.md) |
+| 28 | Ref Finance | 001 | **MEDIUM** | Burrow liquidation creates permanent phantom farming shadows | [Report](audits/ref-finance/findings/IMMUNEFI-SUBMISSION-001.md) |
+| 29 | Hathor Network | 001 | **CRITICAL** | SystemExit/KeyboardInterrupt sandbox escape — permanent node crash via nano contract | [Report](audits/hathor-network/findings/IMMUNEFI-SUBMISSION-001.md) |
+| 30 | Hathor Network | 002 | **HIGH** | Fuel metering + memory limits completely unimplemented — infinite loop/OOM DoS | [Report](audits/hathor-network/findings/IMMUNEFI-SUBMISSION-002.md) |
 
-**Total: 6 High, 2 Medium-High, 18 Medium, 1 Low-Medium across 18 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network + Chainlink + Spark + Merchant Moe: clean audits — 0 findings)
+**Total: 1 Critical, 6 High, 2 Medium-High, 19 Medium, 1 Low-Medium across 20 protocols** (LayerZero + Gearbox V3 + Reserve Protocol + Gains Network + Chainlink + Spark + Merchant Moe: clean audits — 0 findings)
 
 ---
 
@@ -438,6 +443,29 @@ Multi-repository audit of OpenZeppelin's Solidity libraries. 4 repositories: ope
 
 **Full audit report:** [`AUDIT-REPORT.md`](audits/openzeppelin/findings/AUDIT-REPORT.md)
 **Immunefi submissions:** [`IMMUNEFI-SUBMISSION-001.md`](audits/openzeppelin/findings/IMMUNEFI-SUBMISSION-001.md), [`IMMUNEFI-SUBMISSION-002.md`](audits/openzeppelin/findings/IMMUNEFI-SUBMISSION-002.md)
+
+### Ref Finance — [`audits/ref-finance/`](audits/ref-finance/findings/AUDIT-REPORT.md)
+
+NEAR Protocol DEX with multi-pool architecture. 2 repositories: ref-exchange (SimplePool xy=k, StableSwap, RatedSwap with oracle rates, DegenSwap) and boost-farm (shadow farming, boosted rewards, booster staking). ~18,600 LOC across 38 Rust source files. Shadow staking system allows LP tokens to be virtually staked in both farming and burrow (lending) simultaneously via ShadowRecord tracking. 80+ hypotheses tested.
+
+**Findings (2 Medium, 3 Low, 8 Informational — 1 Immunefi submission):**
+
+| ID | Severity | Contract | Description |
+|----|----------|----------|-------------|
+| [001](audits/ref-finance/findings/IMMUNEFI-SUBMISSION-001.md) | Medium | shadow_actions.rs | Burrow liquidation creates permanent phantom farming shadows — fire-and-forget callback with no rollback |
+| M-02 | Medium | actions_of_farmer_reward.rs | Boost-farm reward tokens permanently lost on withdraw+unregister race (self-harm) |
+| L-01 | Low | stnear/linear/nearx_rate.rs | Rate modules accept zero oracle values causing temporary pool DoS |
+| L-02 | Low | booster.rs, farmer_seed.rs | f64 floating-point precision loss in boost ratio calculations |
+| L-03 | Low | degen_swap/price_oracle.rs | Degen price oracle `decimals` subtraction can underflow |
+
+**Well-defended areas:** Internal accounting (never reads ft_balance_of), U256/U384 precision for all math, conservative rounding (DOWN for receives, UP for pays), debit-first credit-on-callback pattern, virtual account isolation, INIT_SHARES_SUPPLY proportional dilution, frozen token checks, assert_one_yocto on admin ops, StableSwap Newton convergence (256 iterations).
+
+**Key rejected hypotheses:** First-depositor inflation (internal accounting), degen oracle manipulation (NEAR async prevents atomic attacks), token theft via swap_out_recipient (virtual account isolation), total_seed_power desync (update-on-claim correct), shadow record underflow via MFT transfer (free_shares check), reentrancy (NEAR single-threaded).
+
+**Full audit report:** [`AUDIT-REPORT.md`](audits/ref-finance/findings/AUDIT-REPORT.md)
+**Immunefi submission:** [`IMMUNEFI-SUBMISSION-001.md`](audits/ref-finance/findings/IMMUNEFI-SUBMISSION-001.md)
+
+---
 
 ### Flamingo Finance — [`audits/flamingo-finance/`](audits/flamingo-finance/findings/AUDIT-REPORT.md)
 
