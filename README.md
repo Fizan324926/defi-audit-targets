@@ -22,6 +22,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | [Optimism](https://immunefi.com/bug-bounty/optimism/) | $2,000,042 | Solidity + Go | 1 Medium | [`audits/optimism/`](audits/optimism/README.md) | Complete |
 | [Olympus DAO](https://immunefi.com/bug-bounty/olympus/) | $3,333,333 | Solidity | 1 Medium-High, 5 Medium | [`audits/olympus-dao/`](audits/olympus-dao/bophades/findings/AUDIT-REPORT.md) | Complete |
 | [Orca Whirlpool](https://immunefi.com/bug-bounty/orca/) | $500,000 | Rust / Solana | 1 Medium (borderline) | [`audits/orca-whirlpool/`](audits/orca-whirlpool/README.md) | Complete |
+| [Gearbox V3](https://immunefi.com/bug-bounty/gearbox/) | $200,000 | Solidity | 0 (clean audit) | [`audits/gearbox/`](audits/gearbox/AUDIT-REPORT.md) | Complete |
 
 ---
 
@@ -43,7 +44,7 @@ Research repository for identifying and prioritizing Immunefi bug bounty program
 | 12 | Olympus | 010 | **MEDIUM** | Heart beat front-running via predictable price updates | [Report](audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-010.md) |
 | 13 | Olympus | 001 | **MEDIUM** | YieldRepo hardcoded `backingPerToken` ($11.33) | [Report](audits/olympus-dao/bophades/findings/IMMUNEFI-SUBMISSION-001.md) |
 
-**Total: 3 High, 1 Medium-High, 9 Medium across 5 protocols**
+**Total: 3 High, 1 Medium-High, 9 Medium across 6 protocols** (Gearbox V3: clean audit — 0 findings)
 
 ---
 
@@ -147,6 +148,23 @@ Decentralized perpetual exchange on Arbitrum/Avalanche ($265-400M TVL, ~$270M da
 **Verification scripts:** `audits/gmx-synthetics/scripts/`
 
 **False positive analysis:** `audits/gmx-synthetics/exploits/false-positives/` (18 findings with detailed elimination rationale)
+
+### Gearbox Protocol V3 — [`audits/gearbox/`](audits/gearbox/AUDIT-REPORT.md)
+
+Generalized leverage protocol for DeFi. 552 Solidity files across 5 repos: core-v3 (credit accounts, pools, oracles), integrations-v3 (19 protocol adapters), oracles-v3 (LP/composite/updatable price feeds), governance (Governor + timelock), periphery-v3 (zappers, routers, liquidators).
+
+**Result: Clean audit — 0 exploitable vulnerabilities found across ~59 hypotheses.**
+
+The codebase demonstrates exceptional defense-in-depth: accounting-based ERC4626 (immune to donation attacks), same-block debt change protection, dual reentrancy guards, epoch-locked GEAR staking for governance, bounded LP price feeds, safe pricing with reserve feeds, and granular bot permissions.
+
+**Low/Informational observations only:**
+
+| Area | Severity | Description |
+|------|----------|-------------|
+| PythPriceFeed | Low | Negative price passes confidence check (caught by consumer-level validation) |
+| CurveTWAPPriceFeed | Informational | Division-by-zero if Curve pool oracle returns 0 (practically impossible) |
+
+**Full audit report:** [`AUDIT-REPORT.md`](audits/gearbox/AUDIT-REPORT.md)
 
 ---
 
